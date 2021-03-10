@@ -13,18 +13,21 @@ import (
 
 func main() {
 	errors := make([]string, 0)
-	masters := []string{
-		"master1.starsiegeplayers.com:29000",
-		"master2.starsiegeplayers.com:29000",
-		"master3.starsiegeplayers.com:29000",
-		"starsiege1.no-ip.org:29000",
-		"starsiege.noip.us:29000",
-		"southerjustice.dyndns-server.com:29000",
-		"dustersteve.ddns.net:29000",
-		"starsiege.from-tx.com:29000",
+	masterQueryOptions := query.Options{
+		Search:  []string {
+			"master1.starsiegeplayers.com:29000",
+			"master2.starsiegeplayers.com:29000",
+			"master3.starsiegeplayers.com:29000",
+			"starsiege1.no-ip.org:29000",
+			"starsiege.noip.us:29000",
+			"southerjustice.dyndns-server.com:29000",
+			"dustersteve.ddns.net:29000",
+			"starsiege.from-tx.com:29000",
+		},
+		Timeout: 5 * time.Second,
 	}
 
-	masterServerInfo, gameAddresses, errs := query.Masters(masters)
+	masterServerInfo, gameAddresses, errs := query.Masters(masterQueryOptions)
 	if len(errs) >= 0 {
 		for _, v := range errs {
 			errors = append(errors, v.Error())
@@ -33,9 +36,13 @@ func main() {
 
 	masterStats(masterServerInfo)
 
-	log.Printf("Acquired %d unique masters\n", len(gameAddresses))
+	log.Printf("Acquired %d unique servers\n", len(gameAddresses))
 
-	games, errs := query.Servers(gameAddresses)
+	gameQueryOptions := query.Options{
+		Search:  gameAddresses,
+		Timeout: 5 * time.Second,
+	}
+	games, errs := query.Servers(gameQueryOptions)
 	for _, err := range errs {
 		errors = append(errors, err.Error())
 	}

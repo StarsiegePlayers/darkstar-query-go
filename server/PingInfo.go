@@ -64,7 +64,6 @@ func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 
 func (s *PingInfo) parseResponse(conn net.Conn) error {
 	// acquire data
-	_ = conn.SetDeadline(time.Now().Add(1 * time.Second))
 	for {
 		data := make([]byte, protocol.MaxPacketSize)
 		length, err := conn.Read(data)
@@ -95,7 +94,7 @@ func (s *PingInfo) parseResponse(conn net.Conn) error {
 	return nil
 }
 
-func (s *PingInfo) PingInfoQuery(conn net.Conn, id int) error {
+func (s *PingInfo) PingInfoQuery(conn net.Conn, id int, timeout time.Duration) error {
 	s.conn = conn
 	s.id = id
 
@@ -112,6 +111,7 @@ func (s *PingInfo) PingInfoQuery(conn net.Conn, id int) error {
 		return fmt.Errorf("game: [%s]: connection Write failed: %w", conn.RemoteAddr(), err)
 	}
 
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 	err = s.parseResponse(conn)
 	if err != nil {
 		return fmt.Errorf("game: [%s]: %w", conn.RemoteAddr(), err)

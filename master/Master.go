@@ -32,21 +32,44 @@ type Master struct {
 
 func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
 	data := p.Data
-	commonNameLength, data := data[0], data[1:]
-	commonName := string(data[0:commonNameLength])
-	commonName = strings.ReplaceAll(commonName, `\n`, "")
-	m.CommonName, data = commonName, data[commonNameLength:]
-
-	motdLength, data := data[0], data[1:]
-	motd, data := string(data[0:motdLength]), data[motdLength:]
-	motd = strings.ReplaceAll(motd, `\n`, " ")
-	if len(motd) > 0 {
-		m.MOTD = motd[10:] // first 10 characters are junk
+	if len(data) <= 0 {
+		return nil
 	}
 
+	commonNameLength, data := data[0], data[1:]
+	if commonNameLength <= 0 || len(data) <= 0 {
+		return nil
+	}
+	if commonNameLength > 0 {
+		commonName := string(data[0:commonNameLength])
+		commonName = strings.ReplaceAll(commonName, `\n`, "")
+		m.CommonName, data = commonName, data[commonNameLength:]
+	}
+
+	motdLength, data := data[0], data[1:]
+	if motdLength <= 0 || len(data) <= 0 {
+		return nil
+	}
+	if motdLength > 0 {
+		var motd string
+		motd, data = string(data[0:motdLength]), data[motdLength:]
+		motd = strings.ReplaceAll(motd, `\n`, " ")
+		m.MOTD = motd
+		if len(motd) > 10 {
+			m.MOTD = motd[10:] // first 10 characters are junk
+		}
+	}
+
+	if len(data) <= 0 {
+		return nil
+	}
 	data = data[1:] // skip null terminator
 
 	serverCount, data := data[0], data[1:]
+	if serverCount <= 0 || len(data) <= 0 {
+		return nil
+	}
+
 	for i := byte(0); i < serverCount; i++ {
 		data = data[1:] // skip separator byte "0x6"
 
@@ -76,7 +99,6 @@ func queryPacket(id int) *protocol.Packet {
 
 func (m *Master) parseResponse(conn net.Conn) error {
 	// acquire data
-	_ = conn.SetDeadline(time.Now().Add(1 * time.Second))
 	for {
 		data := make([]byte, protocol.MaxPacketSize)
 		length, err := conn.Read(data)
@@ -106,7 +128,7 @@ func (m *Master) parseResponse(conn net.Conn) error {
 	return nil
 }
 
-func (m *Master) Query(conn net.Conn, id int) error {
+func (m *Master) Query(conn net.Conn, id int, timeout time.Duration) error {
 	m.conn = conn
 	m.id = id
 
@@ -125,6 +147,7 @@ func (m *Master) Query(conn net.Conn, id int) error {
 		return fmt.Errorf("master: [%s]: connection Write failed: %w", m.Address, err)
 	}
 
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 	err = m.parseResponse(conn)
 	if err != nil {
 		return fmt.Errorf("master: [%s]: %w", m.Address, err)

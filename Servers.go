@@ -2,11 +2,13 @@ package darkstar_query_go
 
 import (
 	"net"
+	"time"
 
 	"github.com/StarsiegePlayers/darkstar-query-go/server"
 )
 
-func Servers(servers []string) ([]*server.PingInfo, []error) {
+func Servers(options Options) ([]*server.PingInfo, []error) {
+	servers := options.Search
 	availableServers := len(servers)
 	await := make(chan *server.Query)
 	errors := make([]error, 0)
@@ -18,7 +20,7 @@ func Servers(servers []string) ([]*server.PingInfo, []error) {
 			availableServers--
 			continue
 		}
-		go pingInfoQuery(conn, id, await)
+		go pingInfoQuery(conn, id, await, options.Timeout)
 	}
 
 	var output []*server.PingInfo
@@ -36,10 +38,10 @@ func Servers(servers []string) ([]*server.PingInfo, []error) {
 	return output, errors
 }
 
-func pingInfoQuery(conn net.Conn, id int, ret chan *server.Query) {
+func pingInfoQuery(conn net.Conn, id int, ret chan *server.Query, timeout time.Duration) {
 	query := new(server.Query)
 	query.ServerInfo = new(server.PingInfo)
-	err := query.ServerInfo.PingInfoQuery(conn, id)
+	err := query.ServerInfo.PingInfoQuery(conn, id, timeout)
 	if err != nil {
 		query.Error = err
 	}

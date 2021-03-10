@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/StarsiegePlayers/darkstar-query-go/master"
 )
 
-func Masters(masters []string) ([]*master.Master, []string, []error) {
+func Masters(options Options) ([]*master.Master, []string, []error) {
+	masters := options.Search
 	availableMasters := len(masters)
 	await := make(chan *master.Query)
 	output := make([]*master.Master, 0)
@@ -25,7 +27,7 @@ func Masters(masters []string) ([]*master.Master, []string, []error) {
 			availableMasters--
 			continue
 		}
-		go masterQuery(conn, server, id, await)
+		go masterQuery(conn, server, id, await, options.Timeout)
 	}
 
 	for i := 0; i < availableMasters; i++ {
@@ -62,10 +64,10 @@ func dedupe(servers []*master.Master) []string {
 	return output
 }
 
-func masterQuery(conn net.Conn, hostname string, id int, ret chan *master.Query) {
+func masterQuery(conn net.Conn, hostname string, id int, ret chan *master.Query, timeout time.Duration) {
 	query := new(master.Query)
 	query.MasterData = new(master.Master)
 	query.MasterData.Address = hostname
-	query.Error = query.MasterData.Query(conn, id)
+	query.Error = query.MasterData.Query(conn, id, timeout)
 	ret <- query
 }
