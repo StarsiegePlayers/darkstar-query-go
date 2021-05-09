@@ -47,8 +47,8 @@ func pingInfoPacket(id int) *protocol.Packet {
 
 func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 	s.GameMode = p.Total
-	s.PlayerCount = byte(p.ID & 0xff)
-	s.MaxPlayers = byte((p.ID >> 8) & 0xff)
+	s.PlayerCount = byte((p.ID >> 8) & 0xff)
+	s.MaxPlayers = byte(p.ID & 0xff)
 
 	s.GameName, p.Data = string(p.Data[0:4]), p.Data[4:]
 	s.GameStatus, p.Data = StatusByte(p.Data[0]), p.Data[1:]
