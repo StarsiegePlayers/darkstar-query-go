@@ -47,7 +47,7 @@ func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
 	}
 
 	motdLength, data := data[0], data[1:]
-	if motdLength <= 0 || len(data) <= 0 {
+	if motdLength < 0 || len(data) <= 0 {
 		return nil
 	}
 	if motdLength > 0 {
@@ -97,27 +97,37 @@ func queryPacket(id int) *protocol.Packet {
 	return packet
 }
 
-func (m *Master) parseResponse(conn net.Conn) error {
+func (m *Master) parseResponse(conn net.Conn, options protocol.Options) error {
 	// acquire data
 	for {
 		data := make([]byte, protocol.MaxPacketSize)
 		length, err := conn.Read(data)
-		var netError *net.OpError
-		if err != nil && errors.As(err, &netError) && netError.Timeout() {
-			return fmt.Errorf("connection timed out")
-		} else if err != nil {
-			return fmt.Errorf("connection read failed: %w", err)
+		if err != nil {
+			var netError *net.OpError
+			if errors.As(err, &netError) && netError.Timeout() {
+				return fmt.Errorf("connection timed out")
+			}
+			if options.Debug {
+				return fmt.Errorf("connection read failed: %w", err)
+			}
+			return fmt.Errorf("connection read failed")
 		}
 
 		packet := protocol.NewPacket()
 		err = packet.UnmarshalBinary(data)
 		if err != nil {
-			return fmt.Errorf("unmarshaling packet failed: %w", err)
+			if options.Debug {
+				return fmt.Errorf("unmarshaling packet failed: %w", err)
+			}
+			return fmt.Errorf("unspecified error parsing packet")
 		}
 
 		err = m.UnmarshalBinary(packet)
 		if err != nil {
-			return fmt.Errorf("unmarshaling master data failed: %w", err)
+			if options.Debug {
+				return fmt.Errorf("unmarshaling master data failed: %w", err)
+			}
+			return fmt.Errorf("unspecified error parsing master response")
 		}
 
 		if length <= protocol.MaxPacketSize || packet.Total <= 1 {
@@ -128,7 +138,7 @@ func (m *Master) parseResponse(conn net.Conn) error {
 	return nil
 }
 
-func (m *Master) Query(conn net.Conn, id int, timeout time.Duration) error {
+func (m *Master) Query(conn net.Conn, id int, options protocol.Options) error {
 	m.conn = conn
 	m.id = id
 
@@ -138,17 +148,23 @@ func (m *Master) Query(conn net.Conn, id int, timeout time.Duration) error {
 
 	data, err := query.MarshalBinary()
 	if err != nil {
-		return fmt.Errorf("master: [%s]: MarshalBinary failed: %w", m.Address, err)
+		if options.Debug {
+			return fmt.Errorf("master: [%s]: MarshalBinary failed: %w", m.Address, err)
+		}
+		return fmt.Errorf("master: [%s]: Error parsing response", m.Address)
 	}
 
 	m.requestStart = time.Now().UnixNano()
 	_, err = conn.Write(data)
 	if err != nil {
-		return fmt.Errorf("master: [%s]: connection Write failed: %w", m.Address, err)
+		if options.Debug {
+			return fmt.Errorf("master: [%s]: connection Write failed: %w", m.Address, err)
+		}
+		return fmt.Errorf("master: [%s]: connection refused", m.Address)
 	}
 
-	_ = conn.SetDeadline(time.Now().Add(timeout))
-	err = m.parseResponse(conn)
+	_ = conn.SetDeadline(time.Now().Add(options.Timeout))
+	err = m.parseResponse(conn, options)
 	if err != nil {
 		return fmt.Errorf("master: [%s]: %w", m.Address, err)
 	}

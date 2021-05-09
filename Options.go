@@ -1,8 +1,15 @@
 package darkstar_query_go
 
-import "time"
+import (
+	"time"
 
-type Options struct {
-	Search []string
-	Timeout time.Duration
+	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
+)
+
+func NewOptions() protocol.Options {
+	return protocol.Options{
+		Search:  nil,
+		Timeout: 5 * time.Second,
+		Debug:   false,
+	}
 }

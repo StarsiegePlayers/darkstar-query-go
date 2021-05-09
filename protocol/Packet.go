@@ -27,25 +27,13 @@ type Packet struct {
 	currentPacket uint16
 }
 
-// NewPacket provides a new packet instance with sane defaults
 func NewPacket() *Packet {
 	return &Packet{
 		Version:       Version,
 		currentPacket: 0,
 	}
 }
-func (p *Packet) String() string {
-	packet, err := p.marshalBinaryInt()
-	if err != nil {
-		return "![unable to create packet]"
-	}
-	return fmt.Sprintf("%x", packet)
-}
 
-// marshalBinaryInt handles the majority of the packet constructing logic
-// this function is shared between String() and the main MarshalBinary() functions
-// the shared code is required because MarshalBinary() also handles the packet state machine (i.e currentPacket)
-// it uses the packet data provided in the current instance of Data
 func (p *Packet) marshalBinaryInt() ([]byte, error) {
 	if len(p.Data) < int(p.currentPacket*MaxDataSize) {
 		return nil, ErrorAllDataMarshaled
@@ -66,8 +54,8 @@ func (p *Packet) marshalBinaryInt() ([]byte, error) {
 	out[1] = byte(p.Type)
 	out[2] = p.Number
 	out[3] = byte(len(p.Data[p.currentPacket*MaxDataSize:]) % MaxDataSize)
-	binary.LittleEndian.PutUint16(out[4:6], p.Key) // key index 5-6
-	binary.LittleEndian.PutUint16(out[6:8], p.ID)  // ID index 7-8
+	binary.LittleEndian.PutUint16(out[4:], p.Key) // key index 5-6
+	binary.LittleEndian.PutUint16(out[6:], p.ID)  // ID index 7-8
 	copy(out[8:], p.Data[p.currentPacket*MaxDataSize:])
 
 	return out, nil
@@ -97,9 +85,17 @@ func (p *Packet) UnmarshalBinary(data []byte) error {
 	p.Type = PacketType(data[1])
 	p.Number = data[2]
 	p.Total = data[3]
-	p.Key = binary.LittleEndian.Uint16(data[4:6]) // key index 5-6
-	p.ID = binary.LittleEndian.Uint16(data[6:8])  // ID index 7-8
+	p.Key = binary.LittleEndian.Uint16(data[3:5])
+	p.ID = binary.LittleEndian.Uint16(data[5:7])
 	copy(p.Data, data[8:])
 
 	return nil
+}
+
+func (p *Packet) String() string {
+	packet, err := p.marshalBinaryInt()
+	if err != nil {
+		return "![unable to create packet]"
+	}
+	return fmt.Sprintf("%x", packet)
 }

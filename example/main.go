@@ -8,12 +8,13 @@ import (
 
 	query "github.com/StarsiegePlayers/darkstar-query-go"
 	"github.com/StarsiegePlayers/darkstar-query-go/master"
+	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
 	"github.com/StarsiegePlayers/darkstar-query-go/server"
 )
 
 func main() {
 	errors := make([]string, 0)
-	masterQueryOptions := query.Options{
+	masterQueryOptions := protocol.Options{
 		Search: []string{
 			"master1.starsiegeplayers.com:29000",
 			"master2.starsiegeplayers.com:29000",
@@ -25,6 +26,7 @@ func main() {
 			"starsiege.from-tx.com:29000",
 		},
 		Timeout: 5 * time.Second,
+		Debug:   true,
 	}
 
 	masterServerInfo, gameAddresses, errs := query.Masters(masterQueryOptions)
@@ -38,9 +40,10 @@ func main() {
 
 	log.Printf("Acquired %d unique servers\n", len(gameAddresses))
 
-	gameQueryOptions := query.Options{
+	gameQueryOptions := protocol.Options{
 		Search:  gameAddresses,
 		Timeout: 5 * time.Second,
+		Debug:   true,
 	}
 	games, errs := query.Servers(gameQueryOptions)
 	for _, err := range errs {

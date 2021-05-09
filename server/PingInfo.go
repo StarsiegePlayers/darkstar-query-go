@@ -32,8 +32,8 @@ type PingInfo struct {
 }
 
 func (s *PingInfo) String() string {
-	return fmt.Sprintf("PingInfoResponse: %s [%s] (%s) IDByte: 0x%02x | Players: %d/%d @ %s",
-		s.Name, s.Ping, s.GameStatus, s.id, s.PlayerCount, s.MaxPlayers, s.Address)
+	return fmt.Sprintf("PingInfoResponse: %s [%s] (%s) Players: %d/%d @ %s",
+		s.Name, s.Ping, s.GameStatus, s.PlayerCount, s.MaxPlayers, s.Address)
 }
 
 func pingInfoPacket(id int) *protocol.Packet {
@@ -47,8 +47,8 @@ func pingInfoPacket(id int) *protocol.Packet {
 
 func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 	s.GameMode = p.Total
-	s.PlayerCount = byte((p.ID >> 8) & 0xff)
-	s.MaxPlayers = byte(p.ID & 0xff)
+	s.PlayerCount = byte(p.ID & 0xff)
+	s.MaxPlayers = byte((p.ID >> 8) & 0xff)
 
 	s.GameName, p.Data = string(p.Data[0:4]), p.Data[4:]
 	s.GameStatus, p.Data = StatusByte(p.Data[0]), p.Data[1:]
@@ -62,28 +62,37 @@ func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 	return nil
 }
 
-func (s *PingInfo) parseResponse(conn net.Conn) error {
+func (s *PingInfo) parseResponse(conn net.Conn, options protocol.Options) error {
 	// acquire data
 	for {
 		data := make([]byte, protocol.MaxPacketSize)
 		length, err := conn.Read(data)
-
-		var netError *net.OpError
-		if errors.As(err, &netError) && netError.Timeout() {
-			return fmt.Errorf("connection timed out")
-		} else if err != nil {
-			return fmt.Errorf("connection read failed: %w", err)
+		if err != nil {
+			var netError *net.OpError
+			if errors.As(err, &netError) && netError.Timeout() {
+				return fmt.Errorf("connection timed out")
+			}
+			if options.Debug {
+				return fmt.Errorf("connection read failed: %w", err)
+			}
+			return fmt.Errorf("connection read failed")
 		}
 
 		packet := protocol.NewPacket()
 		err = packet.UnmarshalBinary(data)
 		if err != nil {
-			return fmt.Errorf("unmarshaling packet failed: %w", err)
+			if options.Debug {
+				return fmt.Errorf("unmarshaling packet failed: %w", err)
+			}
+			return fmt.Errorf("unspecified error parsing packet")
 		}
 
 		err = s.UnmarshalBinary(packet)
 		if err != nil {
-			return fmt.Errorf("unmarshaling master data failed: %w", err)
+			if options.Debug {
+				return fmt.Errorf("unmarshaling pinginfo data failed: %w", err)
+			}
+			return fmt.Errorf("unspecified error parsing ping response")
 		}
 
 		if length <= protocol.MaxPacketSize || packet.Total <= 1 {
@@ -94,7 +103,7 @@ func (s *PingInfo) parseResponse(conn net.Conn) error {
 	return nil
 }
 
-func (s *PingInfo) PingInfoQuery(conn net.Conn, id int, timeout time.Duration) error {
+func (s *PingInfo) PingInfoQuery(conn net.Conn, id int, options protocol.Options) error {
 	s.conn = conn
 	s.id = id
 
@@ -111,8 +120,8 @@ func (s *PingInfo) PingInfoQuery(conn net.Conn, id int, timeout time.Duration) e
 		return fmt.Errorf("game: [%s]: connection Write failed: %w", conn.RemoteAddr(), err)
 	}
 
-	_ = conn.SetDeadline(time.Now().Add(timeout))
-	err = s.parseResponse(conn)
+	_ = conn.SetDeadline(time.Now().Add(options.Timeout))
+	err = s.parseResponse(conn, options)
 	if err != nil {
 		return fmt.Errorf("game: [%s]: %w", conn.RemoteAddr(), err)
 	}
