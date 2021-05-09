@@ -27,13 +27,25 @@ type Packet struct {
 	currentPacket uint16
 }
 
+// NewPacket provides a new packet instance with sane defaults
 func NewPacket() *Packet {
 	return &Packet{
 		Version:       Version,
 		currentPacket: 0,
 	}
 }
+func (p *Packet) String() string {
+	packet, err := p.marshalBinaryInt()
+	if err != nil {
+		return "![unable to create packet]"
+	}
+	return fmt.Sprintf("%x", packet)
+}
 
+// marshalBinaryInt handles the majority of the packet constructing logic
+// this function is shared between String() and the main MarshalBinary() functions
+// the shared code is required because MarshalBinary() also handles the packet state machine (i.e currentPacket)
+// it uses the packet data provided in the current instance of Data
 func (p *Packet) marshalBinaryInt() ([]byte, error) {
 	if len(p.Data) < int(p.currentPacket*MaxDataSize) {
 		return nil, ErrorAllDataMarshaled

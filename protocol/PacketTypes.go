@@ -22,6 +22,7 @@ var packetTypeString = []string{
 	"GameInfoResponse",
 }
 
+// String returns the packet type string based on the defined packet types
 func (p PacketType) String() string {
 	return packetTypeString[int(p)-int(PingInfoQuery)]
 }

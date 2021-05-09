@@ -32,8 +32,8 @@ type PingInfo struct {
 }
 
 func (s *PingInfo) String() string {
-	return fmt.Sprintf("PingInfoResponse: %s [%s] (%s) Players: %d/%d @ %s",
-		s.Name, s.Ping, s.GameStatus, s.PlayerCount, s.MaxPlayers, s.Address)
+	return fmt.Sprintf("PingInfoResponse: %s [%s] (%s) IDByte: 0x%02x | Players: %d/%d @ %s",
+		s.Name, s.Ping, s.GameStatus, s.id, s.PlayerCount, s.MaxPlayers, s.Address)
 }
 
 func pingInfoPacket(id int) *protocol.Packet {

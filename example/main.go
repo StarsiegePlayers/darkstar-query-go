@@ -14,7 +14,7 @@ import (
 func main() {
 	errors := make([]string, 0)
 	masterQueryOptions := query.Options{
-		Search:  []string {
+		Search: []string{
 			"master1.starsiegeplayers.com:29000",
 			"master2.starsiegeplayers.com:29000",
 			"master3.starsiegeplayers.com:29000",
