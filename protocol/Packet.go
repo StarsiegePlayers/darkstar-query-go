@@ -54,8 +54,8 @@ func (p *Packet) marshalBinaryInt() ([]byte, error) {
 	out[1] = byte(p.Type)
 	out[2] = p.Number
 	out[3] = byte(len(p.Data[p.currentPacket*MaxDataSize:]) % MaxDataSize)
-	binary.LittleEndian.PutUint16(out[4:], p.Key) // key index 5-6
-	binary.LittleEndian.PutUint16(out[6:], p.ID)  // ID index 7-8
+	binary.LittleEndian.PutUint16(out[4:6], p.Key) // key index 5-6
+	binary.LittleEndian.PutUint16(out[6:8], p.ID)  // ID index 7-8
 	copy(out[8:], p.Data[p.currentPacket*MaxDataSize:])
 
 	return out, nil
@@ -85,8 +85,8 @@ func (p *Packet) UnmarshalBinary(data []byte) error {
 	p.Type = PacketType(data[1])
 	p.Number = data[2]
 	p.Total = data[3]
-	p.Key = binary.LittleEndian.Uint16(data[3:5])
-	p.ID = binary.LittleEndian.Uint16(data[5:7])
+	p.Key = binary.LittleEndian.Uint16(data[4:6]) // key index 5-6
+	p.ID = binary.LittleEndian.Uint16(data[6:8])  // ID index 7-8
 	copy(p.Data, data[8:])
 
 	return nil
