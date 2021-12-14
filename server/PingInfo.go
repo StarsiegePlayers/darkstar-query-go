@@ -15,15 +15,15 @@ type Query struct {
 }
 
 type PingInfo struct {
-	GameMode    byte   // ??
-	GameName    string // es3a
-	GameVersion string // V 001.000r
-	GameStatus  StatusByte
-	PlayerCount byte
-	MaxPlayers  byte
-	Name        string
-	Address     string
-	Ping        time.Duration
+	GameMode    byte          `csv:"_"` // ??
+	GameName    string        `csv:"_"` // es3a
+	GameVersion string        `csv:"_"` // V 001.000r
+	GameStatus  StatusByte    `csv:"status"`
+	PlayerCount byte          `csv:"cur_players"`
+	MaxPlayers  byte          `csv:"max_players"`
+	Name        string        `csv:"server_name"`
+	Address     string        `csv:"server_address"`
+	Ping        time.Duration `csv:"ping"`
 
 	id           int
 	conn         net.Conn
@@ -47,8 +47,8 @@ func pingInfoPacket(id int) *protocol.Packet {
 
 func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 	s.GameMode = p.Total
-	s.PlayerCount = byte((p.ID >> 8)& 0xff)
-	s.MaxPlayers = byte(p.ID & 0xff)
+	s.PlayerCount = byte(p.ID & 0xff)
+	s.MaxPlayers = byte((p.ID >> 8) & 0xff)
 
 	s.GameName, p.Data = string(p.Data[0:4]), p.Data[4:]
 	s.GameStatus, p.Data = StatusByte(p.Data[0]), p.Data[1:]
