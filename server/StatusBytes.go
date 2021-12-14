@@ -41,6 +41,35 @@ type StatusByteStruct struct {
 	Unknown3        bool
 }
 
+func (s StatusByteStruct) MarshalBinary() byte {
+	output := byte(0)
+	if s.Protected {
+		output |= byte(Protected)
+	}
+	if s.Dedicated {
+		output |= byte(Dedicated)
+	}
+	if s.AllowOldClients {
+		output |= byte(AllowOldClients)
+	}
+	if s.Started {
+		output |= byte(Started)
+	}
+	if s.Dynamix {
+		output |= byte(Dynamix)
+	}
+	if s.WON {
+		output |= byte(WON)
+	}
+	if s.Unknown2 {
+		output |= byte(Unknown2)
+	}
+	if s.Unknown3 {
+		output |= byte(Unknown3)
+	}
+	return output
+}
+
 func (s StatusByte) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Struct())
 }
