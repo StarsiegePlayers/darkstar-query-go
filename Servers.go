@@ -20,7 +20,7 @@ func Servers(options protocol.Options) ([]*server.PingInfo, []error) {
 			availableServers--
 			continue
 		}
-		go pingInfoQuery(conn, id, await, options)
+		go performQuery(conn, id, await, options)
 	}
 
 	var output []*server.PingInfo
@@ -38,12 +38,13 @@ func Servers(options protocol.Options) ([]*server.PingInfo, []error) {
 	return output, errors
 }
 
-func pingInfoQuery(conn net.Conn, id int, ret chan *server.Query, options protocol.Options) {
+func performQuery(conn net.Conn, id int, ret chan *server.Query, options protocol.Options) {
 	query := new(server.Query)
 	query.ServerInfo = new(server.PingInfo)
 	err := query.ServerInfo.PingInfoQuery(conn, id, options)
 	if err != nil {
 		query.Error = err
 	}
+
 	ret <- query
 }

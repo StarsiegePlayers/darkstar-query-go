@@ -11,6 +11,7 @@ import (
 
 type Query struct {
 	ServerInfo *PingInfo
+	GameInfo   *GameInfo
 	Error      error
 }
 
