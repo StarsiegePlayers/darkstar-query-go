@@ -8,6 +8,7 @@ import (
 )
 
 const Version = 0x10
+const VersionExt = 0x69
 const MaxPacketSize = 1500 // standard packet MTU
 const HeaderSize = 8
 const MaxDataSize = MaxPacketSize - HeaderSize
@@ -58,7 +59,7 @@ func (p *Packet) UnmarshalBinary(data []byte) error {
 	}
 
 	p.Data = make([]byte, len(data)-HeaderSize)
-	if data[0] != p.Version {
+	if data[0] != Version && data[0] != VersionExt {
 		return ErrorUnknownPacketVersion
 	}
 
