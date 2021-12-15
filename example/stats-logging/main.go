@@ -31,7 +31,7 @@ func main() {
 func performServerListUpdate() ServerListData {
 	errors := make([]string, 0)
 	masterQueryOptions := protocol.Options{
-		Search: []string{
+		Search: protocol.NewServersMapFromList([]string{
 			"master1.starsiegeplayers.com:29000",
 			"master2.starsiegeplayers.com:29000",
 			"master3.starsiegeplayers.com:29000",
@@ -40,7 +40,7 @@ func performServerListUpdate() ServerListData {
 			"southerjustice.dyndns-server.com:29000",
 			"dustersteve.ddns.net:29000",
 			"starsiege.from-tx.com:29000",
-		},
+		}),
 		Timeout: 5 * time.Second,
 	}
 
@@ -70,7 +70,7 @@ func performServerListUpdate() ServerListData {
 
 func masterStats(data ServerListData) {
 	for _, m := range data.Masters {
-		log.Printf("Master: %s [%s] returned %d servers in %s\n", m.Address, m.CommonName, len(m.ServerAddresses), m.Ping)
+		log.Printf("Master: %s [%s] returned %d servers in %s\n", m.Address, m.CommonName, len(m.Servers), m.Ping)
 	}
 }
 
