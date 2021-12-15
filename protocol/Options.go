@@ -10,4 +10,5 @@ type Options struct {
 	Debug   bool
 
 	MaxServerPacketSize uint16
+	PacketKey           uint16
 }

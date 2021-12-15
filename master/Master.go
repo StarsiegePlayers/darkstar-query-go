@@ -22,7 +22,7 @@ type Query struct {
 type Master struct {
 	Address    string
 	CommonName string
-	MOTDJunk   string
+	MOTDJunk   string `json:"-"`
 	MOTD       string
 	Servers    map[string]*protocol.Server `json:"-"`
 	Ping       time.Duration
@@ -37,7 +37,7 @@ type Master struct {
 func NewMaster() *Master {
 	output := new(Master)
 	output.Servers = make(map[string]*protocol.Server)
-	output.MOTDJunk = ""
+	output.MOTDJunk = "0000000000" // anything except all <0x00> will show the MOTD
 	return output
 }
 
@@ -103,12 +103,15 @@ func (m *Master) MarshalBinaryHeader() []byte {
 	commonName[0] = byte(len(m.CommonName))
 	copy(commonName[1:], m.CommonName)
 
-	// field 02 - pascal MOTD string, incl 10 character spacer
-	motd := make([]byte, len(m.MOTD)+12)
-	motd[0] = byte(len(motd) - 2)  // exclude size byte and trailer null
-	copy(motd[1:1+10], m.MOTDJunk) // magic 10 characters
-	copy(motd[11:len(m.MOTD)+11], m.MOTD)
-	copy(motd[len(motd)-1:], "\x00")
+	motd := make([]byte, 2)
+	if len(m.MOTD) > 0 {
+		// field 02 - pascal MOTD string, incl 10 character spacer
+		motd = make([]byte, len(m.MOTD)+12)
+		motd[0] = byte(len(motd) - 2)  // exclude size byte and trailer null
+		copy(motd[1:1+10], m.MOTDJunk) // magic 10 characters
+		copy(motd[11:len(m.MOTD)+11], m.MOTD)
+		copy(motd[len(motd)-1:], "\x00")
+	}
 
 	// combine
 	output := make([]byte, len(commonName)+len(motd))
@@ -162,7 +165,7 @@ func (m *Master) MarshalBinarySet(input map[string]*protocol.Server) []byte {
 	return output
 }
 
-func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
+func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options protocol.Options) {
 	serverAddresses := make([]string, 0)
 	for k := range m.Servers {
 		serverAddresses = append(serverAddresses, k)
@@ -192,6 +195,7 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 	pkt := protocol.NewPacket()
 	pkt.Type = protocol.MasterServerList
 	pkt.ID = m.MasterID
+	pkt.Key = options.PacketKey
 
 	// simple logic for non spanned packets
 	if overflowPackets <= 0 {
@@ -209,7 +213,7 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 			return
 		}
 
-		_, err = conn.Write(output)
+		_, err = (*conn).WriteTo(output, addr)
 		if err != nil {
 			// todo: log
 			return
@@ -248,7 +252,7 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 		// todo: log
 		return
 	}
-	_, err = conn.Write(output)
+	_, err = (*conn).WriteTo(output, addr)
 	if err != nil {
 		// todo: log
 		return
@@ -280,7 +284,7 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 			// todo: log
 			return
 		}
-		_, err = conn.Write(output)
+		_, err = (*conn).WriteTo(output, addr)
 		if err != nil {
 			// todo: log
 			return
