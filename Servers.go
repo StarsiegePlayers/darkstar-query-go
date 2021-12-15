@@ -13,7 +13,8 @@ func Servers(options protocol.Options) ([]*server.PingInfo, []error) {
 	await := make(chan *server.Query)
 	errors := make([]error, 0)
 
-	for id, game := range servers {
+	id := 0
+	for game, _ := range servers {
 		conn, err := net.Dial("udp", game)
 		if err != nil {
 			errors = append(errors, err)
@@ -21,6 +22,7 @@ func Servers(options protocol.Options) ([]*server.PingInfo, []error) {
 			continue
 		}
 		go performQuery(conn, id, await, options)
+		id++
 	}
 
 	var output []*server.PingInfo

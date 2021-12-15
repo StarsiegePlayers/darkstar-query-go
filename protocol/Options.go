@@ -1,9 +1,11 @@
 package protocol
 
-import "time"
+import (
+	"time"
+)
 
 type Options struct {
-	Search  []string
+	Search  map[string]*Server
 	Timeout time.Duration
 	Debug   bool
 

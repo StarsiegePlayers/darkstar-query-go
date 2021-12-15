@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,17 +20,25 @@ type Query struct {
 }
 
 type Master struct {
-	Address         string
-	CommonName      string
-	MOTD            string
-	ServerAddresses []string `json:"-"`
-	Ping            time.Duration
-	MasterID        uint16
+	Address    string
+	CommonName string
+	MOTDJunk   string
+	MOTD       string
+	Servers    map[string]*protocol.Server `json:"-"`
+	Ping       time.Duration
+	MasterID   uint16
 
 	id           int
 	conn         net.Conn
 	requestStart int64
 	requestEnd   int64
+}
+
+func NewMaster() *Master {
+	output := new(Master)
+	output.Servers = make(map[string]*protocol.Server)
+	output.MOTDJunk = ""
+	return output
 }
 
 func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
@@ -39,16 +48,17 @@ func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
 		return nil
 	}
 
-	// byte 3 after the packet header will be 0x6 on a spanned master response
-	// if it's not, parse the canonical name / motd header
-	if p.Data[2] != 0x06 {
+	// if it's the first packet (and only the first packet)
+	// parse out the common name and MOTD
+	if p.Number == 0x01 {
 		m.CommonName, data = protocol.ReadPascalStringStream(data)
 		m.CommonName = strings.ReplaceAll(m.CommonName, `\n`, "")
 
 		m.MOTD, data = protocol.ReadPascalStringStream(data)
 		m.MOTD = strings.ReplaceAll(m.MOTD, `\n`, " ")
 		if len(m.MOTD) > 10 {
-			m.MOTD = m.MOTD[10:] // first 10 characters are junk
+			// the first 10 characters are classified as "junk"
+			m.MOTDJunk, m.MOTD = m.MOTD[0:10], m.MOTD[10:]
 		}
 	}
 
@@ -67,12 +77,19 @@ func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
 
 		address := fmt.Sprintf("%d.%d.%d.%d", data[0], data[1], data[2], data[3])
 		port := fmt.Sprintf("%d", binary.LittleEndian.Uint16(data[4:4+2]))
+		addressPort := fmt.Sprintf("%s:%s", address, port)
 		data = data[6:]
 
 		if address == "127.0.0.1" { // skip all servers reporting as localhost
 			continue
 		}
-		m.ServerAddresses = append(m.ServerAddresses, fmt.Sprintf("%s:%s", address, port))
+
+		server, err := protocol.NewServerFromString(addressPort, 300)
+		if err != nil {
+			continue
+		}
+
+		m.Servers[addressPort] = server
 	}
 
 	// log.Printf("Servercount: %d, datalen %d, countlen %d\n", serverCount, len(data), len(m.ServerAddresses))
@@ -88,8 +105,8 @@ func (m *Master) MarshalBinaryHeader() []byte {
 
 	// field 02 - pascal MOTD string, incl 10 character spacer
 	motd := make([]byte, len(m.MOTD)+12)
-	motd[0] = byte(len(motd) - 2)    // exclude size byte and trailer null
-	copy(motd[1:1+10], "dummythicc") // magic 10 characters
+	motd[0] = byte(len(motd) - 2)  // exclude size byte and trailer null
+	copy(motd[1:1+10], m.MOTDJunk) // magic 10 characters
 	copy(motd[11:len(m.MOTD)+11], m.MOTD)
 	copy(motd[len(motd)-1:], "\x00")
 
@@ -101,9 +118,16 @@ func (m *Master) MarshalBinaryHeader() []byte {
 	return output
 }
 
-func (m *Master) MarshalBinarySet(set []string) []byte {
+func (m *Master) MarshalBinarySet(input map[string]*protocol.Server) []byte {
+	set := make([]string, 0)
+	for k := range input {
+		set = append(set, k)
+	}
+	sort.Strings(set)
+
 	// work with a byte buffer
 	hold := make([]byte, len(set)*7)
+
 	for index, hostPort := range set {
 		// split ip:port
 		temp := strings.Split(hostPort, ":")
@@ -113,7 +137,7 @@ func (m *Master) MarshalBinarySet(set []string) []byte {
 		// individual entry byte buffer
 		out := make([]byte, 7)
 
-		// 6 bytes is the length of the ip+host as a BCD
+		// <length: 0x06><4 bytes ipv4 addr><2 bytes port>
 		out[0] = byte(6)
 		for k2, v2 := range host {
 			h, err := strconv.Atoi(v2)
@@ -127,7 +151,7 @@ func (m *Master) MarshalBinarySet(set []string) []byte {
 		p, _ := strconv.Atoi(port)
 		binary.LittleEndian.PutUint16(out[5:], uint16(p))
 
-		// current entry * length of entry -> current entry * length of entry + length of entry
+		// current entry * length of entry : current entry * length of entry + length of entry
 		copy(hold[index*7:index*7+7], out)
 	}
 
@@ -139,23 +163,30 @@ func (m *Master) MarshalBinarySet(set []string) []byte {
 }
 
 func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
+	serverAddresses := make([]string, 0)
+	for k := range m.Servers {
+		serverAddresses = append(serverAddresses, k)
+	}
+	sort.Strings(serverAddresses)
+
 	// generate header
 	header := m.MarshalBinaryHeader()
-	overhead := uint16(len(header) + protocol.HeaderSize + 2) // uint16 little endian trailer for payload length
+	firstPacketOverhead := uint16(len(header) + protocol.HeaderSize + 2) // uint16 little endian trailer for payload length
 
 	// calculate packet sizes relative to payload data
-	firstPacketMax := (options.MaxServerPacketSize - overhead) / 7
-	overflowPacketMax := options.MaxServerPacketSize - uint16(len(header)+2)/7
+	// 7 bytes per entry: <0x06 pascal-style entry length in bytes><4 bytes ipv4 address><2 bytes udpPort>
+	firstPacketMax := (options.MaxServerPacketSize - firstPacketOverhead) / 7
+	overflowPacketMax := (options.MaxServerPacketSize - (protocol.HeaderSize + 2)) / 7
 
 	// calculate overflow from first packet
-	overflowSize := len(m.ServerAddresses) - int(firstPacketMax)
+	overflowSize := len(serverAddresses) - int(firstPacketMax)
 	overflowPackets := 0
 	if overflowSize > 0 {
 		overflowPackets = int(math.Ceil(float64(overflowSize)/float64(overflowPacketMax))) + 1
 	}
 
-	localAddresses := make([]string, len(m.ServerAddresses))
-	copy(localAddresses, m.ServerAddresses)
+	localAddresses := make([]string, len(serverAddresses))
+	copy(localAddresses, serverAddresses)
 
 	// send first packet
 	pkt := protocol.NewPacket()
@@ -167,7 +198,7 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 		// setting pkt 1 of 1 is distinctly different from ping/game info
 		pkt.Number = 0x01
 		pkt.Total = 0x01
-		dataset := m.MarshalBinarySet(localAddresses)
+		dataset := m.MarshalBinarySet(m.Servers)
 		tempData := make([]byte, len(header)+len(dataset))
 		copy(tempData[0:len(header)], header)
 		copy(tempData[len(header):len(header)+len(dataset)], dataset)
@@ -193,8 +224,13 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 	pkt.Total = byte(overflowPackets) // overflow packets should be > 2
 
 	// deep copy the first subset of addresses
-	tmpAddresses := make([]string, firstPacketMax)
-	copy(tmpAddresses, localAddresses[:firstPacketMax])
+	tmpAddresses := make(map[string]*protocol.Server)
+	for k, v := range localAddresses {
+		if uint16(k) >= firstPacketMax {
+			break
+		}
+		tmpAddresses[v] = m.Servers[v]
+	}
 
 	// pop the elements we just copied
 	localAddresses = localAddresses[firstPacketMax:]
@@ -224,12 +260,17 @@ func (m *Master) SendResponse(conn net.Conn, options protocol.Options) {
 
 		// make sure we don't exceed the array for the last packet
 		if uint16(len(localAddresses)) <= overflowPacketMax {
-			overflowPacketMax = uint16(len(localAddresses) - 1)
+			overflowPacketMax = uint16(len(localAddresses))
 		}
 
 		// copy the next subset of overflow addresses
-		tmpAddresses := make([]string, overflowPacketMax)
-		copy(tmpAddresses, localAddresses[:overflowPacketMax])
+		tmpAddresses = make(map[string]*protocol.Server)
+		for k, v := range localAddresses {
+			if uint16(k) >= overflowPacketMax {
+				break
+			}
+			tmpAddresses[v] = m.Servers[v]
+		}
 		localAddresses = localAddresses[overflowPacketMax:]
 
 		// marshal and send

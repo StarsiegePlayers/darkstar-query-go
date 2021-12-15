@@ -9,15 +9,16 @@ import (
 	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
 )
 
-func Masters(options protocol.Options) ([]*master.Master, []string, []error) {
+func Masters(options protocol.Options) ([]*master.Master, map[string]*protocol.Server, []error) {
 	masters := options.Search
 	availableMasters := len(masters)
 	await := make(chan *master.Query)
 	output := make([]*master.Master, 0)
 	errorArray := make([]error, 0)
 
-	for id, server := range masters {
-		conn, err := net.Dial("udp", server)
+	id := 0
+	for key, _ := range masters {
+		conn, err := net.Dial("udp", key)
 		if err != nil {
 			var dnsError *net.DNSError
 			if errors.As(err, &dnsError) {
@@ -27,7 +28,8 @@ func Masters(options protocol.Options) ([]*master.Master, []string, []error) {
 			availableMasters--
 			continue
 		}
-		go masterQuery(conn, server, id, await, options)
+		go masterQuery(conn, key, id, await, options)
+		id++
 	}
 
 	for i := 0; i < availableMasters; i++ {
@@ -47,26 +49,23 @@ func Masters(options protocol.Options) ([]*master.Master, []string, []error) {
 	return output, games, errorArray
 }
 
-func dedupe(servers []*master.Master) []string {
-	games := make(map[string]bool)
+func dedupe(servers []*master.Master) map[string]*protocol.Server {
+	output := make(map[string]*protocol.Server)
 	for _, server := range servers {
-		for _, game := range server.ServerAddresses {
-			games[game] = true
+		for k, v := range server.Servers {
+			if _, ok := output[k]; ok {
+				continue
+			}
+			output[k] = v
 		}
 	}
 
-	output := make([]string, len(games))
-	i := 0
-	for server := range games {
-		output[i] = server
-		i++
-	}
 	return output
 }
 
 func masterQuery(conn net.Conn, hostname string, id int, ret chan *master.Query, options protocol.Options) {
 	query := new(master.Query)
-	query.MasterData = new(master.Master)
+	query.MasterData = master.NewMaster()
 	query.MasterData.Address = hostname
 	query.Error = query.MasterData.Query(conn, id, options)
 	ret <- query
