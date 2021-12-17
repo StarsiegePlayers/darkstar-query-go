@@ -7,7 +7,7 @@ import (
 	"github.com/StarsiegePlayers/darkstar-query-go/server"
 )
 
-func Servers(options protocol.Options) ([]*server.PingInfo, []error) {
+func Servers(options *protocol.Options) ([]*server.PingInfo, []error) {
 	servers := options.Search
 	availableServers := len(servers)
 	await := make(chan *server.Query)
@@ -40,7 +40,7 @@ func Servers(options protocol.Options) ([]*server.PingInfo, []error) {
 	return output, errors
 }
 
-func performQuery(conn net.Conn, id int, ret chan *server.Query, options protocol.Options) {
+func performQuery(conn net.Conn, id int, ret chan *server.Query, options *protocol.Options) {
 	query := new(server.Query)
 	query.ServerInfo = new(server.PingInfo)
 	err := query.ServerInfo.PingInfoQuery(conn, id, options)

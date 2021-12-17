@@ -63,7 +63,7 @@ func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 	return nil
 }
 
-func (s *PingInfo) parseResponse(conn net.Conn, options protocol.Options) error {
+func (s *PingInfo) parseResponse(conn net.Conn, options *protocol.Options) error {
 	// acquire data
 	for {
 		data := make([]byte, protocol.MaxPacketSize)
@@ -104,7 +104,7 @@ func (s *PingInfo) parseResponse(conn net.Conn, options protocol.Options) error 
 	return nil
 }
 
-func (s *PingInfo) PingInfoQuery(conn net.Conn, id int, options protocol.Options) error {
+func (s *PingInfo) PingInfoQuery(conn net.Conn, id int, options *protocol.Options) error {
 	s.conn = conn
 	s.id = id
 

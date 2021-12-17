@@ -9,7 +9,7 @@ import (
 	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
 )
 
-func Masters(options protocol.Options) ([]*master.Master, map[string]*protocol.Server, []error) {
+func Masters(options *protocol.Options) ([]*master.Master, map[string]*protocol.Server, []error) {
 	masters := options.Search
 	availableMasters := len(masters)
 	await := make(chan *master.Query)
@@ -63,7 +63,7 @@ func dedupe(servers []*master.Master) map[string]*protocol.Server {
 	return output
 }
 
-func masterQuery(conn net.Conn, hostname string, id int, ret chan *master.Query, options protocol.Options) {
+func masterQuery(conn net.Conn, hostname string, id int, ret chan *master.Query, options *protocol.Options) {
 	query := new(master.Query)
 	query.MasterData = master.NewMaster()
 	query.MasterData.Address = hostname

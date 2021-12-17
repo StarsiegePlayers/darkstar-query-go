@@ -40,7 +40,7 @@ func main() {
 
 	log.Printf("Acquired %d unique servers\n", len(servers))
 
-	gameQueryOptions := protocol.Options{
+	gameQueryOptions := &protocol.Options{
 		Search:  servers,
 		Timeout: 5 * time.Second,
 		Debug:   true,

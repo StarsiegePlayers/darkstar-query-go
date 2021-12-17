@@ -347,8 +347,8 @@ func generateAddresses(count int) map[string]*protocol.Server {
 	return output
 }
 
-func newOptions() protocol.Options {
-	return protocol.Options{
+func newOptions() *protocol.Options {
+	return &protocol.Options{
 		Search:              nil,
 		Timeout:             0,
 		Debug:               false,

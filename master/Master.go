@@ -165,7 +165,7 @@ func (m *Master) MarshalBinarySet(input map[string]*protocol.Server) []byte {
 	return output
 }
 
-func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options protocol.Options) {
+func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *protocol.Options) {
 	serverAddresses := make([]string, 0)
 	for k := range m.Servers {
 		serverAddresses = append(serverAddresses, k)
@@ -302,7 +302,7 @@ func queryPacket(id int) *protocol.Packet {
 	return packet
 }
 
-func (m *Master) parseResponse(conn net.Conn, options protocol.Options) error {
+func (m *Master) parseResponse(conn net.Conn, options *protocol.Options) error {
 	spannedSet := true
 	// acquire data
 	for spannedSet == true {
@@ -347,7 +347,7 @@ func (m *Master) parseResponse(conn net.Conn, options protocol.Options) error {
 	return nil
 }
 
-func (m *Master) Query(conn net.Conn, id int, options protocol.Options) error {
+func (m *Master) Query(conn net.Conn, id int, options *protocol.Options) error {
 	m.conn = conn
 	m.id = id
 
