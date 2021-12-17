@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"github.com/spf13/viper"
 	"net"
 	"os"
 )
@@ -23,26 +23,51 @@ type Configuration struct {
 	BannedNetworks []string
 	BannedMessage  string
 
+	ColorLogs bool
+
 	parsedBannedNets []*net.IPNet
 }
 
-var config = Configuration{
-	ListenIP:      "",
-	ListenPort:    29000,
-	MaxPacketSize: 512,
-	MaxBufferSize: 32768,
-	ServerTTL:     300,
-	Hostname:      "SlimThiccMaster",
-	MOTD:          "Welcome to Neo's MiniMaster",
-	BannedMessage: "Welcome to bansville, population: you\\nVisit the discord to appeal!",
-	ID:            99,
-	ServersPerIP:  15,
-	BannedNetworks: []string{
-		"224.0.0.0/4",
-	},
-}
+const (
+	DefaultConfigFileName = "mstrsvr.yaml"
+	EnvPrefix             = "mstrsvr"
+)
+
+var config = Configuration{}
 
 func configInit() {
+	v := viper.New()
+	v.AddConfigPath(".")
+	v.SetConfigName(EnvPrefix)
+
+	v.SetEnvPrefix(EnvPrefix)
+	v.AllowEmptyEnv(true)
+
+	v.SetDefault("ListenIP", "")
+	v.SetDefault("ListenPort", 29000)
+	v.SetDefault("MaxPacketSize", 512)
+	v.SetDefault("MaxBufferSize", 32768)
+	v.SetDefault("ServerTTL", 300)
+	v.SetDefault("Hostname", "SlimThiccMaster")
+	v.SetDefault("MOTD", "Welcome to Neo's MiniMaster")
+	v.SetDefault("BannedMessage", "Welcome to bansville, population: you\\nVisit the discord to appeal!")
+	v.SetDefault("ID", 99)
+	v.SetDefault("ServersPerIP", 15)
+	v.SetDefault("BannedNetworks", []string{"224.0.0.0/4"})
+	v.SetDefault("ColorLogs", true)
+
+	err := v.ReadInConfig()
+	if _, configFileNotFound := err.(viper.ConfigFileNotFoundError); err != nil && configFileNotFound {
+		LogComponentAlert("config", "config file not found, creating...")
+		err := v.WriteConfigAs(DefaultConfigFileName)
+		if err != nil {
+			LogComponentAlert("config", "unable to create config! [%s]", err)
+			os.Exit(1)
+		}
+	} else if err != nil {
+		LogComponentAlert("config", "error while reading config file [%s]", err)
+	}
+
 	thisMaster.Service.MOTD = config.MOTD
 	thisMaster.Service.MasterID = config.ID
 	thisMaster.Service.CommonName = config.Hostname
@@ -56,12 +81,16 @@ func configInit() {
 	for _, v := range config.BannedNetworks {
 		_, network, err := net.ParseCIDR(v)
 		if err != nil {
-			LogComponent("config", "error unable to parse BannedNetwork %s, %s", v, err)
+			LogComponentAlert("config", "unable to parse BannedNetwork %s, %s", v, err)
 			os.Exit(1)
 		}
 		config.parsedBannedNets = append(config.parsedBannedNets, network)
 	}
 
-	configJson, _ := json.Marshal(config)
-	LogComponent("config", string(configJson))
+	err = v.Unmarshal(&config)
+	if err != nil {
+		LogComponentAlert("config", "error unmarshalling config [%s]", err)
+	}
+
+	loggerInit(config.ColorLogs)
 }

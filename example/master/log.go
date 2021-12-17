@@ -9,9 +9,12 @@ import (
 
 var au aurora.Aurora
 
-func loggerInit() {
+func init() {
 	log.SetOutput(colorable.NewColorableStdout())
-	au = aurora.NewAurora(true)
+}
+
+func loggerInit(colorLogs bool) {
+	au = aurora.NewAurora(colorLogs)
 }
 
 func serverColor(input string) uint8 {
@@ -24,6 +27,11 @@ func serverColor(input string) uint8 {
 
 func componentColor(input string) aurora.Color {
 	switch input {
+	case "shutdown":
+		fallthrough
+	case "startup":
+		return aurora.BrightFg | aurora.MagentaFg
+
 	case "server":
 		return aurora.BrightFg | aurora.CyanFg
 

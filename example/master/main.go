@@ -13,8 +13,11 @@ import (
 var serviceRunning = true
 
 func main() {
-	loggerInit()
+	loggerInit(false)
 	configInit()
+
+	LogComponent("startup", "~~~ Neo's MiniMaster Starting Up ~~~")
+
 	maintenanceTimer := maintenanceInit()
 
 	addrPort := fmt.Sprintf("%s:%d", config.ListenIP, config.ListenPort)
@@ -24,18 +27,33 @@ func main() {
 	}
 	LogComponent("server", "now listening on [%s]", addrPort)
 
-	// setup control+c hook
+	// setup kill / rehash hooks
 	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGHUP)
 	go func() {
-		<-c
-		LogComponentAlert("server", "shutdown initiated...")
-		err = pconn.Close()
-		if err != nil {
-			log.Fatalln(err)
+		for serviceRunning == true {
+			sig := <-c
+			LogComponentAlert("server", "received [%s]", sig.String())
+			switch sig {
+			case os.Interrupt:
+				fallthrough
+			case os.Kill:
+				fallthrough
+			case syscall.SIGTERM:
+				LogComponentAlert("server", "shutdown initiated...")
+				err = pconn.Close()
+				if err != nil {
+					log.Fatalln(err)
+				}
+				serviceRunning = false
+				maintenanceShutdown(maintenanceTimer)
+				break
+			case syscall.SIGHUP:
+				LogComponent("server", "rehashing configuration file...")
+				configInit()
+				break
+			}
 		}
-		serviceRunning = false
-		maintenanceShutdown(maintenanceTimer)
 	}()
 
 	// start listening loop
@@ -65,4 +83,5 @@ func main() {
 			go serve(&pconn, addr, buf[:n])
 		}
 	}
+	LogComponent("shutdown", "process complete")
 }
