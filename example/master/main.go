@@ -12,11 +12,25 @@ import (
 
 var serviceRunning = true
 
+var (
+	VERSION string
+	DATE    string
+	TIME    string
+	DEBUG   string
+)
+
+func init() {
+	if DEBUG == "" {
+		DEBUG = "Release"
+	}
+}
+
 func main() {
 	loggerInit(false)
 	configInit()
 
 	LogComponent("startup", "~~~ Neo's MiniMaster Starting Up ~~~")
+	LogComponent("startup", "Version %s %s - Built on [%s@%s]", VERSION, DEBUG, DATE, TIME)
 
 	maintenanceTimer := maintenanceInit()
 
@@ -29,7 +43,7 @@ func main() {
 
 	// setup kill / rehash hooks
 	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
 	go func() {
 		for serviceRunning == true {
 			sig := <-c
@@ -47,10 +61,6 @@ func main() {
 				}
 				serviceRunning = false
 				maintenanceShutdown(maintenanceTimer)
-				break
-			case syscall.SIGHUP:
-				LogComponent("server", "rehashing configuration file...")
-				configInit()
 				break
 			}
 		}

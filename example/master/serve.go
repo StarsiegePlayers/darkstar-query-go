@@ -159,7 +159,7 @@ func sendList(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protoco
 }
 
 func sendBanned(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
-	LogServer(ipPort, "Banned message sent", ipPort)
+	LogServer(ipPort, "Banned message sent")
 	thisMaster.Options.PacketKey = p.Key
 	thisMaster.BannedService.SendResponse(conn, addr, thisMaster.Options)
 }

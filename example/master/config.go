@@ -1,12 +1,16 @@
 package main
 
 import (
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"net"
 	"os"
+	"sync"
 )
 
 type Configuration struct {
+	sync.Mutex
+
 	ListenIP   string
 	ListenPort uint16
 
@@ -33,7 +37,7 @@ const (
 	EnvPrefix             = "mstrsvr"
 )
 
-var config = Configuration{}
+var config = new(Configuration)
 
 func configInit() {
 	v := viper.New()
@@ -56,6 +60,18 @@ func configInit() {
 	v.SetDefault("BannedNetworks", []string{"224.0.0.0/4"})
 	v.SetDefault("ColorLogs", true)
 
+	v.OnConfigChange(func(in fsnotify.Event) {
+		LogComponent("config", "configuration change detected, updating...")
+		rehashConfig(v)
+	})
+	v.WatchConfig()
+
+	rehashConfig(v)
+
+	loggerInit(config.ColorLogs)
+}
+
+func rehashConfig(v *viper.Viper) {
 	err := v.ReadInConfig()
 	if _, configFileNotFound := err.(viper.ConfigFileNotFoundError); err != nil && configFileNotFound {
 		LogComponentAlert("config", "config file not found, creating...")
@@ -68,16 +84,15 @@ func configInit() {
 		LogComponentAlert("config", "error while reading config file [%s]", err)
 	}
 
-	thisMaster.Service.MOTD = config.MOTD
-	thisMaster.Service.MasterID = config.ID
-	thisMaster.Service.CommonName = config.Hostname
+	config = new(Configuration)
+	config.Lock()
+	defer config.Unlock()
+	err = v.Unmarshal(&config)
+	if err != nil {
+		LogComponentAlert("config", "error unmarshalling config [%s]", err)
+	}
 
-	thisMaster.BannedService.MOTD = config.BannedMessage
-	thisMaster.BannedService.MasterID = config.ID
-	thisMaster.BannedService.CommonName = config.Hostname
-
-	thisMaster.Options.MaxServerPacketSize = config.MaxPacketSize
-
+	config.parsedBannedNets = make([]*net.IPNet, 0)
 	for _, v := range config.BannedNetworks {
 		_, network, err := net.ParseCIDR(v)
 		if err != nil {
@@ -87,10 +102,13 @@ func configInit() {
 		config.parsedBannedNets = append(config.parsedBannedNets, network)
 	}
 
-	err = v.Unmarshal(&config)
-	if err != nil {
-		LogComponentAlert("config", "error unmarshalling config [%s]", err)
-	}
+	thisMaster.Service.MOTD = config.MOTD
+	thisMaster.Service.MasterID = config.ID
+	thisMaster.Service.CommonName = config.Hostname
 
-	loggerInit(config.ColorLogs)
+	thisMaster.BannedService.MOTD = config.BannedMessage
+	thisMaster.BannedService.MasterID = config.ID
+	thisMaster.BannedService.CommonName = config.Hostname
+
+	thisMaster.Options.MaxServerPacketSize = config.MaxPacketSize
 }
