@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
+	"encoding/json"
 	"net"
+	"os"
 )
 
 type Configuration struct {
@@ -12,9 +13,9 @@ type Configuration struct {
 	MaxPacketSize uint16
 	MaxBufferSize uint16
 
-	Hostname string
-
-	MOTD string
+	Hostname  string
+	MOTD      string
+	ServerTTL int
 
 	ID           uint16
 	ServersPerIP uint16
@@ -30,6 +31,7 @@ var config = Configuration{
 	ListenPort:    29000,
 	MaxPacketSize: 512,
 	MaxBufferSize: 32768,
+	ServerTTL:     300,
 	Hostname:      "SlimThiccMaster",
 	MOTD:          "Welcome to Neo's MiniMaster",
 	BannedMessage: "Welcome to bansville, population: you\\nVisit the discord to appeal!",
@@ -41,21 +43,25 @@ var config = Configuration{
 }
 
 func configInit() {
-	service.MOTD = config.MOTD
-	service.MasterID = config.ID
-	service.CommonName = config.Hostname
+	thisMaster.Service.MOTD = config.MOTD
+	thisMaster.Service.MasterID = config.ID
+	thisMaster.Service.CommonName = config.Hostname
 
-	bannedService.MOTD = config.BannedMessage
-	bannedService.MasterID = config.ID
-	bannedService.CommonName = config.Hostname
+	thisMaster.BannedService.MOTD = config.BannedMessage
+	thisMaster.BannedService.MasterID = config.ID
+	thisMaster.BannedService.CommonName = config.Hostname
 
-	options.MaxServerPacketSize = config.MaxPacketSize
+	thisMaster.Options.MaxServerPacketSize = config.MaxPacketSize
 
 	for _, v := range config.BannedNetworks {
 		_, network, err := net.ParseCIDR(v)
 		if err != nil {
-			log.Fatalf("Error unable to parse BannedNetwork %s, %s", v, err)
+			LogComponent("config", "error unable to parse BannedNetwork %s, %s", v, err)
+			os.Exit(1)
 		}
 		config.parsedBannedNets = append(config.parsedBannedNets, network)
 	}
+
+	configJson, _ := json.Marshal(config)
+	LogComponent("config", string(configJson))
 }
