@@ -14,7 +14,7 @@ import (
 
 func main() {
 	errors := make([]string, 0)
-	masterQueryOptions := protocol.Options{
+	masterQueryOptions := &protocol.Options{
 		Search: protocol.NewServersMapFromList([]string{
 			"master1.starsiegeplayers.com:29000",
 			"master2.starsiegeplayers.com:29000",
