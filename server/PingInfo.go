@@ -16,6 +16,7 @@ type Query struct {
 }
 
 type PingInfo struct {
+	protocol.Packet
 	GameMode    byte          `csv:"_"` // ??
 	GameName    string        `csv:"_"` // es3a
 	GameVersion string        `csv:"_"` // V 001.000r
@@ -46,7 +47,18 @@ func pingInfoPacket(id int) *protocol.Packet {
 	return packet
 }
 
-func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
+func (s *PingInfo) MarshalBinary() ([]byte, error) {
+	// TODO
+	return s.Packet.MarshalBinary()
+}
+
+func (s *PingInfo) UnmarshalBinary(data []byte) error {
+	err := s.Packet.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+
+	p := s.Packet
 	s.GameMode = p.Total
 	s.PlayerCount = byte(p.ID & 0xff)
 	s.MaxPlayers = byte((p.ID >> 8) & 0xff)
@@ -55,7 +67,6 @@ func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 	s.GameStatus, p.Data = StatusByte(p.Data[0]), p.Data[1:]
 	s.GameVersion, p.Data = string(p.Data[0:10]), p.Data[10:]
 
-	p.Data[len(p.Data)-1] = 0x00
 	s.Name = string(p.Data[:protocol.Clen(p.Data)])
 
 	s.Address = s.conn.RemoteAddr().String()
@@ -65,6 +76,7 @@ func (s *PingInfo) UnmarshalBinary(p *protocol.Packet) error {
 
 func (s *PingInfo) parseResponse(conn net.Conn, options *protocol.Options) error {
 	// acquire data
+	// TODO: what does a spanned message look like for this packet? (do we need the for loop here)
 	for {
 		data := make([]byte, protocol.MaxPacketSize)
 		length, err := conn.Read(data)
@@ -79,16 +91,7 @@ func (s *PingInfo) parseResponse(conn net.Conn, options *protocol.Options) error
 			return fmt.Errorf("connection read failed")
 		}
 
-		packet := protocol.NewPacket()
-		err = packet.UnmarshalBinary(data)
-		if err != nil {
-			if options.Debug {
-				return fmt.Errorf("unmarshaling packet failed: %w", err)
-			}
-			return fmt.Errorf("unspecified error parsing packet")
-		}
-
-		err = s.UnmarshalBinary(packet)
+		err = s.UnmarshalBinary(data)
 		if err != nil {
 			if options.Debug {
 				return fmt.Errorf("unmarshaling pinginfo data failed: %w", err)
@@ -96,7 +99,7 @@ func (s *PingInfo) parseResponse(conn net.Conn, options *protocol.Options) error
 			return fmt.Errorf("unspecified error parsing ping response")
 		}
 
-		if length <= protocol.MaxPacketSize || packet.Total <= 1 {
+		if length <= protocol.MaxPacketSize || s.Packet.Total <= 1 {
 			break
 		}
 	}

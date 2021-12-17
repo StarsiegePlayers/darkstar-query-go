@@ -10,6 +10,7 @@ type Server struct {
 	Connection *net.PacketConn
 	LastSeen   time.Time
 	TTL        int
+	Info       *Packet
 }
 
 func NewServerFromString(input string, ttl int) (*Server, error) {
@@ -36,10 +37,7 @@ func NewServersMapFromList(input []string) map[string]*Server {
 }
 
 func (s Server) IsExpired() bool {
-	if time.Since(s.LastSeen) >= time.Duration(s.TTL) {
-		return true
-	}
-	return false
+	return time.Since(s.LastSeen) >= time.Duration(s.TTL)*time.Second
 }
 
 func (s Server) String() string {

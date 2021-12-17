@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,7 +14,6 @@ const MaxPacketSize = 1500 // standard packet MTU
 const HeaderSize = 8
 const MaxDataSize = MaxPacketSize - HeaderSize
 
-var ErrorAllDataMarshaled = errors.New("all data has been marshaled")
 var ErrorUnknownPacketVersion = errors.New("unknown packet version")
 var ErrorEmptyPacket = errors.New("empty packet received")
 
@@ -25,12 +25,23 @@ type Packet struct {
 	Key     uint16 // used for verification and (transaction) id purposes
 	ID      uint16 // master server id (read from config file)
 	Data    []byte // MaxSize = (MaxPacketSize - HeaderSize)
+
+	// implements
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+	fmt.Stringer
 }
 
 func NewPacket() *Packet {
 	return &Packet{
 		Version: Version,
 	}
+}
+
+func NewPacketWithData(data []byte) (*Packet, error) {
+	out := NewPacket()
+	err := out.UnmarshalBinary(data)
+	return out, err
 }
 
 func (p *Packet) MarshalBinary() ([]byte, error) {
