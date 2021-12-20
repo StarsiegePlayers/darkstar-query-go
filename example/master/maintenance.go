@@ -26,7 +26,7 @@ func performMaintenance(t *time.Ticker) {
 func cleanUpStaleServers() int {
 	count := 0
 	for k, v := range thisMaster.Service.Servers {
-		if v.IsExpired() {
+		if v.IsExpired(config.serverTimeout) {
 			thisMaster.Lock()
 			LogComponent("maintenance", "Removing server %s, last seen: %s", v.String(), v.LastSeen.Format(time.Stamp))
 			delete(thisMaster.Service.Servers, k)

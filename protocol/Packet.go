@@ -27,9 +27,9 @@ type Packet struct {
 	Data    []byte // MaxSize = (MaxPacketSize - HeaderSize)
 
 	// implements
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-	fmt.Stringer
+	encoding.BinaryMarshaler   `json:"-" csv:"-"`
+	encoding.BinaryUnmarshaler `json:"-" csv:"-"`
+	fmt.Stringer               `json:"-" csv:"-"`
 }
 
 func NewPacket() *Packet {

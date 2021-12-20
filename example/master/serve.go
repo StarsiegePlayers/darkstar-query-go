@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/StarsiegePlayers/darkstar-query-go/master"
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
+	darkstar "github.com/StarsiegePlayers/darkstar-query-go/v2"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 	"net"
 	"sync"
 	"time"
@@ -11,16 +12,16 @@ import (
 
 type Service struct {
 	sync.Mutex
-	Service          *master.Master
-	BannedService    *master.Master
+	Service          *protocol.Master
+	BannedService    *protocol.Master
 	Options          *protocol.Options
 	IPServiceCount   map[string]uint16
 	SolicitedServers map[string]bool
 }
 
 var thisMaster = Service{
-	Service:          master.NewMaster(),
-	BannedService:    master.NewMaster(),
+	Service:          protocol.NewMaster(),
+	BannedService:    protocol.NewMaster(),
 	Options:          &protocol.Options{},
 	IPServiceCount:   make(map[string]uint16),
 	SolicitedServers: make(map[string]bool),
@@ -72,14 +73,6 @@ func serve(conn *net.PacketConn, addr *net.UDPAddr, buf []byte) {
 		sendList(conn, addr, ipPort, p)
 		break
 
-	case protocol.PingInfoResponse:
-		if isBanned {
-			LogServerAlert(addr.IP.String(), "Received a %s packet from banned host", p.Type.String())
-			return
-		}
-		registerPingInfo(conn, addr, ipPort, p)
-		break
-
 	default:
 		if isBanned {
 			LogServerAlert(ipPort, "Received unsolicited packet type %s from banned host", p.Type.String())
@@ -90,33 +83,37 @@ func serve(conn *net.PacketConn, addr *net.UDPAddr, buf []byte) {
 }
 
 func registerHeartbeat(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
+	thisMaster.Lock()
 	thisMaster.SolicitedServers[ipPort] = true
-	sendVerificationPacket(conn, addr, ipPort, p)
+	thisMaster.Unlock()
+
+	q := darkstar.NewQuery(2*time.Second, true)
+	q.Addresses = append(q.Addresses, ipPort)
+	response, err := q.Servers()
+	if len(err) > 0 || len(response) <= 0 {
+		LogServerAlert(ipPort, "error during server verification [%s, %d]", err, len(response))
+		return
+	}
+
+	registerPingInfo(conn, addr, ipPort, p)
 }
 
 func registerPingInfo(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
 	thisMaster.Lock()
-	defer thisMaster.Unlock()
-
-	if _, exist := thisMaster.SolicitedServers[ipPort]; !exist {
-		LogServerAlert(ipPort, "Received unsolicited packet type %s", ipPort)
-		return
-	}
-
 	if _, exist := thisMaster.Service.Servers[ipPort]; !exist {
 		count := thisMaster.IPServiceCount[addr.IP.String()]
 		if uint16(count)+1 > config.ServersPerIP {
 			LogServerAlert(ipPort, "Rejecting additional server for IP - count: %d/%d", count, config.ServersPerIP)
+			thisMaster.Unlock()
 			return
 		}
 
 		// log and add new
 		LogServer(ipPort, "Heartbeat - New Server")
-		thisMaster.Service.Servers[ipPort] = &protocol.Server{
+		thisMaster.Service.Servers[ipPort] = &server.Server{
 			Address:    addr,
 			Connection: conn,
 			LastSeen:   time.Now(),
-			TTL:        config.ServerTTL,
 		}
 		count++
 		LogServer(ipPort, "New Server for IP - total server count for IP: %d/%d", count, config.ServersPerIP)
@@ -127,39 +124,29 @@ func registerPingInfo(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p 
 	LogServer(ipPort, "Heartbeat - delta: %s", time.Now().Sub(s.LastSeen).String())
 	s.LastSeen = time.Now()
 	thisMaster.Service.Servers[ipPort] = s
-	thisMaster.Service.Servers[ipPort].Info = p
-}
-
-func sendVerificationPacket(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
-	response := protocol.NewPacket()
-	response.ID = config.ID
-	response.Key = p.Key
-	response.Type = protocol.PingInfoQuery
-
-	data, err := response.MarshalBinary()
-	if err != nil {
-		LogServerAlert(ipPort, "error marshalling verification response - [%s]", err)
-		return
-	}
-
-	// send two packets because wtf dynamix
-	for i := 0; i < 2; i++ {
-		_, err = (*conn).WriteTo(data, addr)
-		if err != nil {
-			LogServerAlert(ipPort, "error sending verification response - [%s]", ipPort, err)
-			return
-		}
-	}
+	thisMaster.Unlock()
 }
 
 func sendList(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
-	LogServer(ipPort, "Servers list sent")
-	thisMaster.Options.PacketKey = p.Key
-	thisMaster.Service.SendResponse(conn, addr, thisMaster.Options)
+	packets := thisMaster.Service.GeneratePackets(thisMaster.Options, p.Key)
+	for _, v := range packets {
+		_, err := (*conn).WriteTo(v, addr)
+		if err != nil {
+			LogServerAlert(ipPort, "error sending list packet [%s]", err)
+			return
+		}
+	}
+	LogServer(ipPort, "servers list sent")
 }
 
 func sendBanned(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
-	LogServer(ipPort, "Banned message sent")
-	thisMaster.Options.PacketKey = p.Key
-	thisMaster.BannedService.SendResponse(conn, addr, thisMaster.Options)
+	packets := thisMaster.BannedService.GeneratePackets(thisMaster.Options, p.Key)
+	for _, v := range packets {
+		_, err := (*conn).WriteTo(v, addr)
+		if err != nil {
+			LogServerAlert(ipPort, "error sending banned message packet [%s]", err)
+			return
+		}
+	}
+	LogServer(ipPort, "banned message sent")
 }

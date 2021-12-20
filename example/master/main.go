@@ -69,6 +69,7 @@ func main() {
 	// start listening loop
 	buf := make([]byte, config.MaxPacketSize)
 	buf2 := make([]byte, config.MaxPacketSize)
+	prevIPPort := ""
 	for serviceRunning {
 		n, addr, err := pconn.ReadFrom(buf)
 		if err != nil {
@@ -83,11 +84,14 @@ func main() {
 			}
 		}
 
-		// dedupe packets because wtf dynamix
-		if bytes.Equal(buf, buf2) {
+		//dedupe packets because wtf dynamix
+		if prevIPPort == addr.String() && bytes.Equal(buf2[:n], buf[:n]) {
+			// blank out the stored header and discord the packet silently
+			prevIPPort = ""
 			continue
 		}
 		copy(buf2, buf)
+		prevIPPort = addr.String()
 
 		if addr, ok := addr.(*net.UDPAddr); ok {
 			go serve(&pconn, addr, buf[:n])

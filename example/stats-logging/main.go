@@ -7,20 +7,23 @@ import (
 	"strings"
 	"time"
 
-	query "github.com/StarsiegePlayers/darkstar-query-go"
-	"github.com/StarsiegePlayers/darkstar-query-go/master"
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
-	"github.com/StarsiegePlayers/darkstar-query-go/server"
+	darkstar "github.com/StarsiegePlayers/darkstar-query-go/v2"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
 )
 
 const ServerStatsPathFormat = "2006/01/02"
 
 type ServerListData struct {
 	RequestTime time.Time
-	Masters     []*master.Master
-	Games       []*server.PingInfo
+	Masters     []*query.MasterQuery
+	Games       []*query.PingInfoQuery
 	Errors      []string
 }
+
+const (
+	timeout = 5 * time.Second
+	debug   = true
+)
 
 func main() {
 	data := performServerListUpdate()
@@ -30,32 +33,31 @@ func main() {
 
 func performServerListUpdate() ServerListData {
 	errors := make([]string, 0)
-	masterQueryOptions := &protocol.Options{
-		Search: protocol.NewServersMapFromList([]string{
-			"master1.starsiegeplayers.com:29000",
-			"master2.starsiegeplayers.com:29000",
-			"master3.starsiegeplayers.com:29000",
-			"starsiege1.no-ip.org:29000",
-			"starsiege.noip.us:29000",
-			"southerjustice.dyndns-server.com:29000",
-			"dustersteve.ddns.net:29000",
-			"starsiege.from-tx.com:29000",
-		}),
-		Timeout: 5 * time.Second,
+	q := darkstar.NewQuery(timeout, debug)
+	q.Addresses = []string{
+		"master1.starsiegeplayers.com:29000",
+		"master2.starsiegeplayers.com:29000",
+		"master3.starsiegeplayers.com:29000",
+		"starsiege1.no-ip.org:29000",
+		"starsiege.noip.us:29000",
+		"southerjustice.dyndns-server.com:29000",
+		"dustersteve.ddns.net:29000",
+		"starsiege.from-tx.com:29000",
 	}
 
-	masterServerInfo, gameAddresses, errs := query.Masters(masterQueryOptions)
+	masterServerInfo, gameAddresses, errs := q.Masters()
 	if len(errs) >= 0 {
 		for _, v := range errs {
 			errors = append(errors, v.Error())
 		}
 	}
 
-	serverQueryOptions := &protocol.Options{
-		Search:  gameAddresses,
-		Timeout: 5 * time.Second,
+	q = darkstar.NewQuery(timeout, debug)
+	for k := range gameAddresses {
+		q.Addresses = append(q.Addresses, k)
 	}
-	games, errs := query.Servers(serverQueryOptions)
+
+	games, errs := q.Servers()
 	for _, err := range errs {
 		errors = append(errors, err.Error())
 	}

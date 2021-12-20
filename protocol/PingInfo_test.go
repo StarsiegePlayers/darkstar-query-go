@@ -1,7 +1,6 @@
-package server
+package protocol
 
 import (
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
 	"github.com/stretchr/testify/suite"
 	"net"
 	"testing"
@@ -15,7 +14,7 @@ type PingInfoTestSuite struct {
 
 func (t *PingInfoTestSuite) SetupTest() {
 	t.PingInfo = new(PingInfo)
-	t.PingInfo.conn, t.ConnPipe = net.Pipe()
+	t.PingInfo.Packet = NewPacket()
 }
 
 func (t *PingInfoTestSuite) TestServer_PingInfoUnmarshal() {
@@ -25,14 +24,14 @@ func (t *PingInfoTestSuite) TestServer_PingInfoUnmarshal() {
 		0x20, 0x4F, 0x6E, 0x20, 0x54, 0x68, 0x65,
 	}
 	response := &PingInfo{
-		Packet: protocol.Packet{
+		Packet: &Packet{
 			Version: 0x10,
 			Type:    0x04,
 			Number:  0xff,
 			Total:   0xfd,
 			Key:     0x00,
 			ID:      0x4000,
-			Data:    question[8:],
+			Data:    question[23:],
 		},
 		GameMode:    0xfd,
 		GameName:    "es3a",
@@ -41,8 +40,6 @@ func (t *PingInfoTestSuite) TestServer_PingInfoUnmarshal() {
 		PlayerCount: 0x0,
 		MaxPlayers:  0x40,
 		Name:        "DOV: City On The",
-		Address:     "pipe",
-		conn:        t.PingInfo.conn,
 	}
 
 	err := t.PingInfo.UnmarshalBinary(question)

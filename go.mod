@@ -1,4 +1,4 @@
-module github.com/StarsiegePlayers/darkstar-query-go
+module github.com/StarsiegePlayers/darkstar-query-go/v2
 
 go 1.15
 

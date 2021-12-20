@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 )
 
 type Configuration struct {
@@ -19,7 +20,9 @@ type Configuration struct {
 
 	Hostname  string
 	MOTD      string
-	ServerTTL int
+	ServerTTL string
+
+	MaintenanceInterval string
 
 	ID           uint16
 	ServersPerIP uint16
@@ -30,6 +33,8 @@ type Configuration struct {
 	ColorLogs bool
 
 	parsedBannedNets []*net.IPNet
+	serverTimeout    time.Duration
+	maintenanceTimer time.Duration
 }
 
 const (
@@ -51,7 +56,8 @@ func configInit() {
 	v.SetDefault("ListenPort", 29000)
 	v.SetDefault("MaxPacketSize", 512)
 	v.SetDefault("MaxBufferSize", 32768)
-	v.SetDefault("ServerTTL", 300)
+	v.SetDefault("ServerTTL", 5*time.Minute)
+	v.SetDefault("MaintenanceInterval", 60*time.Second)
 	v.SetDefault("Hostname", "SlimThiccMaster")
 	v.SetDefault("MOTD", "Welcome to Neo's MiniMaster")
 	v.SetDefault("BannedMessage", "Welcome to bansville, population: you\\nVisit the discord to appeal!")
@@ -61,8 +67,10 @@ func configInit() {
 	v.SetDefault("ColorLogs", true)
 
 	v.OnConfigChange(func(in fsnotify.Event) {
-		LogComponent("config", "configuration change detected, updating...")
-		rehashConfig(v)
+		if in.Op == fsnotify.Write {
+			LogComponent("config", "configuration change detected, updating...")
+			rehashConfig(v)
+		}
 	})
 	v.WatchConfig()
 
@@ -86,7 +94,6 @@ func rehashConfig(v *viper.Viper) {
 
 	config = new(Configuration)
 	config.Lock()
-	defer config.Unlock()
 	err = v.Unmarshal(&config)
 	if err != nil {
 		LogComponentAlert("config", "error unmarshalling config [%s]", err)
@@ -102,6 +109,25 @@ func rehashConfig(v *viper.Viper) {
 		config.parsedBannedNets = append(config.parsedBannedNets, network)
 	}
 
+	config.serverTimeout, err = time.ParseDuration(config.ServerTTL)
+	if err != nil {
+		LogComponentAlert("config", "unable to parse ServerTimeout, defaulting to 5 minutes")
+		config.serverTimeout = 5 * time.Minute
+	}
+
+	config.serverTimeout, err = time.ParseDuration(config.ServerTTL)
+	if err != nil {
+		LogComponentAlert("config", "unable to parse ServerTimeout, defaulting to 5 minutes")
+		config.serverTimeout = 5 * time.Minute
+	}
+
+	config.maintenanceTimer, err = time.ParseDuration(config.MaintenanceInterval)
+	if err != nil {
+		LogComponentAlert("config", "unable to parse MaintenanceInterval, defaulting to 60 seconds")
+		config.serverTimeout = 60 * time.Second
+	}
+
+	thisMaster.Lock()
 	thisMaster.Service.MOTD = config.MOTD
 	thisMaster.Service.MasterID = config.ID
 	thisMaster.Service.CommonName = config.Hostname
@@ -111,4 +137,6 @@ func rehashConfig(v *viper.Viper) {
 	thisMaster.BannedService.CommonName = config.Hostname
 
 	thisMaster.Options.MaxServerPacketSize = config.MaxPacketSize
+	thisMaster.Unlock()
+	config.Unlock()
 }

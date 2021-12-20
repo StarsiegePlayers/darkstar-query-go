@@ -1,0 +1,43 @@
+# Neo's Mini Master configuration file
+
+# should we display each server with a unique color based on ip address and port? default: true
+colorlogs: true
+
+# should the service listen on a particular ip address and port?
+# defaults are "" (all ip addresses) and port 29000
+listenip: ""
+listenport: 29000
+
+# what is the host (or canonical name) for this server max 31 chars
+hostname: 'Slim Thicc Master'
+
+# message of the day to send to all connecting users (optional) max 255 characters
+motd: 'Welcome to Neo''s MiniMaster'
+
+# 16 bit value to identify this master server, should be unique across masters
+id: 69
+
+# number of servers that can originate from the same IP address
+serversperip: 15
+
+# ---- options for banned ips
+# banned ip networks receive a separate MOTD message with no servers attached
+bannedmessage: 'Welcome to bansville, population: you\nVisit the discord to appeal!'
+
+# What networks are considered banned? Specify using a CIDR format
+bannednetworks:
+    - 224.0.0.0/4
+
+###### advanced networking options bellow ###########
+
+# server timeout value
+serverttl: 5m
+
+# how often to run maintenance
+maintenanceInterval: 60s
+
+# send/receive buffer size in bytes - default: 32768 (32KiB)
+maxbuffersize: 32768
+
+# maximum packet size up to max of 2000 bytes - default - (512B)
+maxpacketsize: 512

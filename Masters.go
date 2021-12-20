@@ -1,41 +1,24 @@
 package darkstar_query_go
 
 import (
-	"errors"
-	"fmt"
-	"net"
-
-	"github.com/StarsiegePlayers/darkstar-query-go/master"
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 )
 
-func Masters(options *protocol.Options) ([]*master.Master, map[string]*protocol.Server, []error) {
-	masters := options.Search
-	availableMasters := len(masters)
-	await := make(chan *master.Query)
-	output := make([]*master.Master, 0)
+func (q *Query) Masters() ([]*query.MasterQuery, map[string]*server.Server, []error) {
+	availableMasters := len(q.Addresses)
+	await := make(chan *ServerResult)
+	output := make([]*query.MasterQuery, 0)
 	errorArray := make([]error, 0)
 
-	id := 0
-	for key, _ := range masters {
-		conn, err := net.Dial("udp", key)
-		if err != nil {
-			var dnsError *net.DNSError
-			if errors.As(err, &dnsError) {
-				errorArray = append(errorArray, fmt.Errorf("master: [%s]: no such host", dnsError.Name))
-			}
-
-			availableMasters--
-			continue
-		}
-		go masterQuery(conn, key, id, await, options)
-		id++
+	for _, address := range q.Addresses {
+		go q.performMasterQuery(address, await)
 	}
 
 	for i := 0; i < availableMasters; i++ {
 		result := <-await
-		if result.MasterData.Ping > 0 {
-			output = append(output, result.MasterData)
+		if result.Master.Ping > 0 {
+			output = append(output, result.Master)
 		}
 		if result.Error != nil {
 			errorArray = append(errorArray, result.Error)
@@ -44,15 +27,15 @@ func Masters(options *protocol.Options) ([]*master.Master, map[string]*protocol.
 
 	close(await)
 
-	games := dedupe(output)
+	games := q.dedupeMasterQuery(output)
 
 	return output, games, errorArray
 }
 
-func dedupe(servers []*master.Master) map[string]*protocol.Server {
-	output := make(map[string]*protocol.Server)
-	for _, server := range servers {
-		for k, v := range server.Servers {
+func (q *Query) dedupeMasterQuery(servers []*query.MasterQuery) map[string]*server.Server {
+	output := make(map[string]*server.Server)
+	for _, svr := range servers {
+		for k, v := range svr.Servers {
 			if _, ok := output[k]; ok {
 				continue
 			}
@@ -63,10 +46,11 @@ func dedupe(servers []*master.Master) map[string]*protocol.Server {
 	return output
 }
 
-func masterQuery(conn net.Conn, hostname string, id int, ret chan *master.Query, options *protocol.Options) {
-	query := new(master.Query)
-	query.MasterData = master.NewMaster()
-	query.MasterData.Address = hostname
-	query.Error = query.MasterData.Query(conn, id, options)
-	ret <- query
+func (q *Query) performMasterQuery(address string, ret chan *ServerResult) {
+	r := new(ServerResult)
+
+	r.Master = query.NewMasterQueryWithOptions(address, q.Options)
+	r.Error = r.Master.Query()
+
+	ret <- r
 }

@@ -1,60 +1,63 @@
-package master
+package protocol
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 )
 
-type Query struct {
-	MasterData *Master
-	Error      error
-}
-
 type Master struct {
+	*Packet    `json:"-" csv:"-"`
 	Address    string
 	CommonName string
-	MOTDJunk   string `json:"-"`
+	MOTDJunk   string `json:"-" csv:"-"`
 	MOTD       string
-	Servers    map[string]*protocol.Server `json:"-"`
-	Ping       time.Duration
+	Servers    map[string]*server.Server
 	MasterID   uint16
-
-	id           int
-	conn         net.Conn
-	requestStart int64
-	requestEnd   int64
 }
 
 func NewMaster() *Master {
 	output := new(Master)
-	output.Servers = make(map[string]*protocol.Server)
+	output.Servers = make(map[string]*server.Server)
 	output.MOTDJunk = "0000000000" // anything except all <0x00> will show the MOTD
+	output.Packet = NewPacket()
 	return output
 }
 
-func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
+func (m *Master) UnmarshalBinarySet(data [][]byte) error {
+	for _, v := range data {
+		err := m.UnmarshalBinary(v)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Master) UnmarshalBinary(data []byte) error {
+	err := m.Packet.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+
+	p := m.Packet
 	m.MasterID = p.ID
-	data := p.Data
-	if len(data) <= 2 {
+	if len(p.Data) <= 2 {
 		return nil
 	}
 
 	// if it's the first packet (and only the first packet)
 	// parse out the common name and MOTD
 	if p.Number == 0x01 {
-		m.CommonName, data = protocol.ReadPascalStringStream(data)
+		m.CommonName, p.Data = ReadPascalStringStream(p.Data)
 		m.CommonName = strings.ReplaceAll(m.CommonName, `\n`, "")
 
-		m.MOTD, data = protocol.ReadPascalStringStream(data)
+		m.MOTD, p.Data = ReadPascalStringStream(p.Data)
 		m.MOTD = strings.ReplaceAll(m.MOTD, `\n`, " ")
 		if len(m.MOTD) > 10 {
 			// the first 10 characters are classified as "junk"
@@ -62,34 +65,35 @@ func (m *Master) UnmarshalBinary(p *protocol.Packet) error {
 		}
 	}
 
-	if len(data) <= 0 {
+	if len(p.Data) <= 0 {
 		return nil
 	}
-	data = data[1:] // null header separator
+	p.Data = p.Data[1:] // null header separator
 
-	serverCount, data := data[0], data[1:]
-	if serverCount <= 0 || len(data) <= 0 {
+	serverCount := byte(0)
+	serverCount, p.Data = p.Data[0], p.Data[1:]
+	if serverCount <= 0 || len(p.Data) <= 0 {
 		return nil
 	}
 
 	for i := byte(0); i < serverCount; i++ {
-		data = data[1:] // skip separator byte "0x6"
+		p.Data = p.Data[1:] // skip separator byte "0x6"
 
-		address := fmt.Sprintf("%d.%d.%d.%d", data[0], data[1], data[2], data[3])
-		port := fmt.Sprintf("%d", binary.LittleEndian.Uint16(data[4:4+2]))
+		address := fmt.Sprintf("%d.%d.%d.%d", p.Data[0], p.Data[1], p.Data[2], p.Data[3])
+		port := fmt.Sprintf("%d", binary.LittleEndian.Uint16(p.Data[4:4+2]))
 		addressPort := fmt.Sprintf("%s:%s", address, port)
-		data = data[6:]
+		p.Data = p.Data[6:]
 
 		if address == "127.0.0.1" { // skip all servers reporting as localhost
 			continue
 		}
 
-		server, err := protocol.NewServerFromString(addressPort, 300)
+		svr, err := server.NewServerFromString(addressPort)
 		if err != nil {
 			continue
 		}
 
-		m.Servers[addressPort] = server
+		m.Servers[addressPort] = svr
 	}
 
 	// log.Printf("Servercount: %d, datalen %d, countlen %d\n", serverCount, len(data), len(m.ServerAddresses))
@@ -121,7 +125,7 @@ func (m *Master) MarshalBinaryHeader() []byte {
 	return output
 }
 
-func (m *Master) MarshalBinarySet(input map[string]*protocol.Server) []byte {
+func (m *Master) MarshalBinarySet(input map[string]*server.Server) []byte {
 	set := make([]string, 0)
 	for k := range input {
 		set = append(set, k)
@@ -165,21 +169,23 @@ func (m *Master) MarshalBinarySet(input map[string]*protocol.Server) []byte {
 	return output
 }
 
-func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *protocol.Options) {
+func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 	serverAddresses := make([]string, 0)
 	for k := range m.Servers {
 		serverAddresses = append(serverAddresses, k)
 	}
 	sort.Strings(serverAddresses)
 
+	output := make([][]byte, 0)
+
 	// generate header
 	header := m.MarshalBinaryHeader()
-	firstPacketOverhead := uint16(len(header) + protocol.HeaderSize + 2) // uint16 little endian trailer for payload length
+	firstPacketOverhead := uint16(len(header) + HeaderSize + 2) // uint16 little endian trailer for payload length
 
 	// calculate packet sizes relative to payload data
 	// 7 bytes per entry: <0x06 pascal-style entry length in bytes><4 bytes ipv4 address><2 bytes udpPort>
 	firstPacketMax := (options.MaxServerPacketSize - firstPacketOverhead) / 7
-	overflowPacketMax := (options.MaxServerPacketSize - (protocol.HeaderSize + 2)) / 7
+	overflowPacketMax := (options.MaxServerPacketSize - (HeaderSize + 2)) / 7
 
 	// calculate overflow from first packet
 	overflowSize := len(serverAddresses) - int(firstPacketMax)
@@ -192,10 +198,10 @@ func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *
 	copy(localAddresses, serverAddresses)
 
 	// send first packet
-	pkt := protocol.NewPacket()
-	pkt.Type = protocol.MasterServerList
+	pkt := NewPacket()
+	pkt.Type = MasterServerList
 	pkt.ID = m.MasterID
-	pkt.Key = options.PacketKey
+	pkt.Key = key
 
 	// simple logic for non spanned packets
 	if overflowPackets <= 0 {
@@ -207,20 +213,16 @@ func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *
 		copy(tempData[0:len(header)], header)
 		copy(tempData[len(header):len(header)+len(dataset)], dataset)
 		pkt.Data = tempData
-		output, err := pkt.MarshalBinary()
+		binOut, err := pkt.MarshalBinary()
 		if err != nil {
 			// todo: log
-			return
+			return [][]byte{}
 		}
 
-		_, err = (*conn).WriteTo(output, addr)
-		if err != nil {
-			// todo: log
-			return
-		}
+		output = append(output, binOut)
 
 		// exit early
-		return
+		return output
 	}
 
 	// otherwise, time to do some convoluted craziness
@@ -228,7 +230,7 @@ func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *
 	pkt.Total = byte(overflowPackets) // overflow packets should be > 2
 
 	// deep copy the first subset of addresses
-	tmpAddresses := make(map[string]*protocol.Server)
+	tmpAddresses := make(map[string]*server.Server)
 	for k, v := range localAddresses {
 		if uint16(k) >= firstPacketMax {
 			break
@@ -245,18 +247,14 @@ func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *
 	copy(tempData[0:len(header)], header)
 	copy(tempData[len(header):len(header)+len(dataset)], dataset)
 
-	// send
+	// copy to output
 	pkt.Data = tempData
-	output, err := pkt.MarshalBinary()
+	binOut, err := pkt.MarshalBinary()
 	if err != nil {
 		// todo: log
-		return
+		return [][]byte{}
 	}
-	_, err = (*conn).WriteTo(output, addr)
-	if err != nil {
-		// todo: log
-		return
-	}
+	output = append(output, binOut)
 
 	// do the above for each overflow packet
 	for i := 1; i < overflowPackets; i++ {
@@ -268,7 +266,7 @@ func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *
 		}
 
 		// copy the next subset of overflow addresses
-		tmpAddresses = make(map[string]*protocol.Server)
+		tmpAddresses = make(map[string]*server.Server)
 		for k, v := range localAddresses {
 			if uint16(k) >= overflowPacketMax {
 				break
@@ -279,107 +277,13 @@ func (m *Master) SendResponse(conn *net.PacketConn, addr *net.UDPAddr, options *
 
 		// marshal and send
 		pkt.Data = m.MarshalBinarySet(tmpAddresses)
-		output, err := pkt.MarshalBinary()
+		binOut, err = pkt.MarshalBinary()
 		if err != nil {
 			// todo: log
-			return
+			return [][]byte{}
 		}
-		_, err = (*conn).WriteTo(output, addr)
-		if err != nil {
-			// todo: log
-			return
-		}
+		output = append(output, binOut)
 	}
 
-}
-
-func queryPacket(id int) *protocol.Packet {
-	packet := protocol.NewPacket()
-	packet.Type = protocol.PingInfoQuery
-	packet.Number = protocol.RequestAllPackets
-	packet.Key = uint16(id)
-
-	return packet
-}
-
-func (m *Master) parseResponse(conn net.Conn, options *protocol.Options) error {
-	spannedSet := true
-	// acquire data
-	for spannedSet == true {
-		data := make([]byte, protocol.MaxPacketSize)
-		length, err := conn.Read(data)
-		if err != nil {
-			var netError *net.OpError
-			if errors.As(err, &netError) && netError.Timeout() {
-				return fmt.Errorf("connection timed out")
-			}
-			if options.Debug {
-				return fmt.Errorf("connection read failed: %w", err)
-			}
-			return fmt.Errorf("connection read failed")
-		}
-
-		packet := protocol.NewPacket()
-		err = packet.UnmarshalBinary(data)
-		if err != nil {
-			if options.Debug {
-				return fmt.Errorf("unmarshaling packet failed: %w", err)
-			}
-			return fmt.Errorf("unspecified error parsing packet")
-		}
-		if (packet.Number == 0xff || packet.Total == 0x00) || (packet.Number == packet.Total) {
-			spannedSet = false
-		}
-
-		err = m.UnmarshalBinary(packet)
-		if err != nil {
-			if options.Debug {
-				return fmt.Errorf("unmarshaling master data failed: %w", err)
-			}
-			return fmt.Errorf("unspecified error parsing master response")
-		}
-
-		if length <= protocol.MaxPacketSize || packet.Total <= 1 {
-			break
-		}
-	}
-
-	return nil
-}
-
-func (m *Master) Query(conn net.Conn, id int, options *protocol.Options) error {
-	m.conn = conn
-	m.id = id
-
-	query := queryPacket(id)
-
-	// log.Printf("Server: %s - %s\n", conn.RemoteAddr(), query)
-
-	data, err := query.MarshalBinary()
-	if err != nil {
-		if options.Debug {
-			return fmt.Errorf("master: [%s]: MarshalBinary failed: %w", m.Address, err)
-		}
-		return fmt.Errorf("master: [%s]: Error parsing response", m.Address)
-	}
-
-	m.requestStart = time.Now().UnixNano()
-	_, err = conn.Write(data)
-	if err != nil {
-		if options.Debug {
-			return fmt.Errorf("master: [%s]: connection Write failed: %w", m.Address, err)
-		}
-		return fmt.Errorf("master: [%s]: connection refused", m.Address)
-	}
-
-	_ = conn.SetDeadline(time.Now().Add(options.Timeout))
-	err = m.parseResponse(conn, options)
-	if err != nil {
-		return fmt.Errorf("master: [%s]: %w", m.Address, err)
-	}
-
-	m.requestEnd = time.Now().UnixNano()
-	m.Ping = time.Duration(m.requestEnd - m.requestStart)
-
-	return nil
+	return output
 }

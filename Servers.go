@@ -1,37 +1,25 @@
 package darkstar_query_go
 
 import (
-	"net"
-
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
-	"github.com/StarsiegePlayers/darkstar-query-go/server"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
 )
 
-func Servers(options *protocol.Options) ([]*server.PingInfo, []error) {
-	servers := options.Search
-	availableServers := len(servers)
-	await := make(chan *server.Query)
+func (q *Query) Servers() ([]*query.PingInfoQuery, []error) {
+	availableServers := len(q.Addresses)
+	await := make(chan *ServerResult)
 	errors := make([]error, 0)
 
-	id := 0
-	for game, _ := range servers {
-		conn, err := net.Dial("udp", game)
-		if err != nil {
-			errors = append(errors, err)
-			availableServers--
-			continue
-		}
-		go performQuery(conn, id, await, options)
-		id++
+	for _, game := range q.Addresses {
+		go q.performServerQuery(game, await)
 	}
 
-	var output []*server.PingInfo
+	var output []*query.PingInfoQuery
 	for i := 0; i < availableServers; i++ {
 		result := <-await
 		if result.Error != nil {
 			errors = append(errors, result.Error)
 		} else {
-			output = append(output, result.ServerInfo)
+			output = append(output, result.Game)
 		}
 	}
 
@@ -40,13 +28,15 @@ func Servers(options *protocol.Options) ([]*server.PingInfo, []error) {
 	return output, errors
 }
 
-func performQuery(conn net.Conn, id int, ret chan *server.Query, options *protocol.Options) {
-	query := new(server.Query)
-	query.ServerInfo = new(server.PingInfo)
-	err := query.ServerInfo.PingInfoQuery(conn, id, options)
+func (q *Query) performServerQuery(address string, ret chan *ServerResult) {
+	r := new(ServerResult)
+
+	r.Game = query.NewPingInfoQueryWithOptions(address, q.Options)
+
+	err := r.Game.Query()
 	if err != nil {
-		query.Error = err
+		r.Error = err
 	}
 
-	ret <- query
+	ret <- r
 }

@@ -1,12 +1,9 @@
-package master
+package protocol
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/StarsiegePlayers/darkstar-query-go/protocol"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 	"github.com/stretchr/testify/suite"
-	"log"
-	"net"
 	"testing"
 )
 
@@ -21,7 +18,7 @@ func (t *MasterTestSite) SetupTest() {
 		CommonName: "\\nDummythicc Masterserver Testing",
 		MOTD:       "Welcome to a Testing server for Neo's Dummythiccness",
 		MOTDJunk:   "dummythicc",
-		Servers:    make(map[string]*protocol.Server),
+		Servers:    make(map[string]*server.Server),
 		MasterID:   99,
 	}
 }
@@ -71,22 +68,10 @@ func (t MasterTestSite) TestMaster_SendResponse_1Pkt() {
 	t.Master.MasterID = 69
 	options := newOptions()
 
-	server, err := net.ListenPacket("udp", "127.0.0.1:42071")
-	if err != nil {
-		t.T().Fatalf("Error duing listen - %s", err)
-	}
-	defer server.Close()
+	packets := t.Master.GeneratePackets(options, 0)
 
-	resultPipe := make(chan []byte, 1)
-	go listeningClient(resultPipe, server)
-
-	t.Master.SendResponse(&server, server.LocalAddr().(*net.UDPAddr), options)
-	packets := make([][]byte, 0)
-
-	for i := 0; i < 1; i++ {
-		r := <-resultPipe
-		packets = append(packets, r)
-		t.Assert().Equal(response[i], packets[i])
+	for k, v := range packets {
+		t.Assert().Equal(response[k], v)
 	}
 }
 
@@ -169,23 +154,10 @@ func (t MasterTestSite) TestMaster_SendResponse_2Pkts() {
 	t.Master.Servers = generateAddresses(128)
 	options := newOptions()
 
-	server, err := net.ListenPacket("udp", "127.0.0.1:42070")
-	if err != nil {
-		t.T().Fatalf("Error duing listen - %s", err)
-	}
-	defer server.Close()
+	packets := t.Master.GeneratePackets(options, 0)
 
-	resultPipe := make(chan []byte, 1)
-	go listeningClient(resultPipe, server)
-
-	t.Master.SendResponse(&server, server.LocalAddr().(*net.UDPAddr), options)
-
-	packets := make([][]byte, 0)
-
-	for i := 0; i < 2; i++ {
-		r := <-resultPipe
-		packets = append(packets, r)
-		t.Assert().Equal(response[i], packets[i])
+	for k, v := range packets {
+		t.Assert().Equal(response[k], v)
 	}
 }
 
@@ -197,36 +169,22 @@ func (t MasterTestSite) TestMaster_MarshalPacket_NoMOTD_Header() {
 		Address:    "localhost.localdomain",
 		CommonName: "MiniMaster",
 		MOTD:       "",
-		Servers:    protocol.NewServersMapFromList([]string{}),
+		Servers:    server.NewServersMapFromList([]string{}),
 		MasterID:   99,
 	}
 	options := newOptions()
-	options.PacketKey = 0x0300
 
 	response := [][]byte{
 		{
 			0x10, 0x06, 0x01, 0x01, 0x03, 0x00, 0x00, 0x63, 0x0A, 0x4D, 0x69, 0x6E, 0x69, 0x4D, 0x61, 0x73,
-			0x74, 0x65, 0x72,
+			0x74, 0x65, 0x72, 0x00, 0x00, 0x00,
 		},
 	}
 
-	server, err := net.ListenPacket("udp", "127.0.0.1:42069")
-	if err != nil {
-		t.T().Fatalf("Error duing listen - %s", err)
-	}
-	defer server.Close()
+	packets := t.Master.GeneratePackets(options, 0x0300)
 
-	resultPipe := make(chan []byte, 1)
-	go listeningClient(resultPipe, server)
-
-	t.Master.SendResponse(&server, server.LocalAddr().(*net.UDPAddr), options)
-
-	packets := make([][]byte, 0)
-
-	for i := 0; i < 1; i++ {
-		r := <-resultPipe
-		packets = append(packets, r)
-		t.Assert().Equal(response[i], packets[i])
+	for k, v := range packets {
+		t.Assert().Equal(response[k], v)
 	}
 }
 
@@ -239,7 +197,7 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary() {
 		Address:    "localhost.localdomain",
 		CommonName: "Master2.Starsiege.pw",
 		MOTD:       "Join the Starsiege Discord at discord.gg\\TNm4s2p",
-		Servers:    protocol.NewServersMapFromList([]string{"154.0.175.219:29008", "184.89.64.182:29001", "154.0.175.219:29010", "154.0.175.219:29004", "154.0.175.219:29003", "154.0.175.219:29001", "154.0.175.219:29005", "154.0.175.219:29007", "154.0.175.219:29002", "154.0.175.219:29012", "154.0.175.219:29006", "192.155.86.254:29009", "154.0.175.219:29011", "192.155.86.254:29010", "192.155.86.254:29008", "192.155.86.254:29007", "192.155.86.254:29006", "192.155.86.254:29005", "192.155.86.254:29004", "192.155.86.254:29003", "192.155.86.254:29002", "192.155.86.254:29001", "96.126.117.157:29004", "96.126.117.157:29003", "96.126.117.157:29002", "96.126.117.157:29001", "154.0.175.219:29009"}),
+		Servers:    server.NewServersMapFromList([]string{"154.0.175.219:29008", "184.89.64.182:29001", "154.0.175.219:29010", "154.0.175.219:29004", "154.0.175.219:29003", "154.0.175.219:29001", "154.0.175.219:29005", "154.0.175.219:29007", "154.0.175.219:29002", "154.0.175.219:29012", "154.0.175.219:29006", "192.155.86.254:29009", "154.0.175.219:29011", "192.155.86.254:29010", "192.155.86.254:29008", "192.155.86.254:29007", "192.155.86.254:29006", "192.155.86.254:29005", "192.155.86.254:29004", "192.155.86.254:29003", "192.155.86.254:29002", "192.155.86.254:29001", "96.126.117.157:29004", "96.126.117.157:29003", "96.126.117.157:29002", "96.126.117.157:29001", "154.0.175.219:29009"}),
 		MasterID:   0x02,
 	}
 	response := []byte{
@@ -265,19 +223,13 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary() {
 		0x9A, 0x00, 0xAF, 0xDB, 0x51, 0x71,
 	}
 
-	p := new(protocol.Packet)
-	err := p.UnmarshalBinary(response)
-	t.Assert().Nil(err)
-
-	t.T().Logf("Type %s - Key %d - ID %d - Number %d - Total %d", p.Type, p.Key, p.ID, p.Number, p.Total)
-
 	m := NewMaster()
-	err = m.UnmarshalBinary(p)
+	err := m.UnmarshalBinary(response)
 	t.Assert().Nil(err)
 
 	t.Assert().Equal(t.Master.CommonName, m.CommonName)
 	t.Assert().Equal(t.Master.MOTD, m.MOTD)
-	t.Assert().Equal(t.Master.id, m.id)
+	t.Assert().Equal(t.Master.MasterID, m.MasterID)
 
 	for k := range t.Master.Servers {
 		t.Assert().Equal(t.Master.Servers[k].String(), m.Servers[k].String())
@@ -293,7 +245,7 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary_Minimaster() {
 		Address:    "localhost.localdomain",
 		CommonName: "MiniMaster",
 		MOTD:       "",
-		Servers:    protocol.NewServersMapFromList([]string{"184.61.79.247:29002", "73.20.252.165:29002", "65.29.146.31:29003", "96.126.117.157:29002", "96.126.117.157:29004", "96.126.117.157:29005", "96.126.117.157:29007", "65.29.146.31:29001", "73.20.252.165:29001", "65.29.146.31:29002", "96.126.117.157:29001", "96.126.117.157:29003", "96.126.117.157:29006", "146.115.168.117:29001", "184.61.79.247:29001", "184.61.79.247:29003"}),
+		Servers:    server.NewServersMapFromList([]string{"184.61.79.247:29002", "73.20.252.165:29002", "65.29.146.31:29003", "96.126.117.157:29002", "96.126.117.157:29004", "96.126.117.157:29005", "96.126.117.157:29007", "65.29.146.31:29001", "73.20.252.165:29001", "65.29.146.31:29002", "96.126.117.157:29001", "96.126.117.157:29003", "96.126.117.157:29006", "146.115.168.117:29001", "184.61.79.247:29001", "184.61.79.247:29003"}),
 		MasterID:   99,
 	}
 	response := []byte{
@@ -308,19 +260,13 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary_Minimaster() {
 		0x92, 0x73, 0xA8, 0x75, 0x49, 0x71,
 	}
 
-	p := new(protocol.Packet)
-	err := p.UnmarshalBinary(response)
-	t.Assert().Nil(err)
-
-	t.T().Logf("Type %s - Key %d - ID %d - Number %d - Total %d", p.Type, p.Key, p.ID, p.Number, p.Total)
-
 	m := NewMaster()
-	err = m.UnmarshalBinary(p)
+	err := m.UnmarshalBinary(response)
 	t.Assert().Nil(err)
 
 	t.Assert().Equal(t.Master.CommonName, m.CommonName)
 	t.Assert().Equal(t.Master.MOTD, m.MOTD)
-	t.Assert().Equal(t.Master.id, m.id)
+	t.Assert().Equal(t.Master.MasterID, m.MasterID)
 
 	output := make([]string, 0)
 	for k, _ := range m.Servers {
@@ -336,48 +282,22 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary_Minimaster() {
 /********************************************************************/
 // Utility Functions
 
-func generateAddresses(count int) map[string]*protocol.Server {
+func generateAddresses(count int) map[string]*server.Server {
 	startPort := 29001
-	output := make(map[string]*protocol.Server)
+	output := make(map[string]*server.Server)
 	for i := 0; i < count; i++ {
 		addrPort := fmt.Sprintf("127.0.0.1:%d", startPort+i)
-		thisServer, _ := protocol.NewServerFromString(addrPort, 300)
+		thisServer, _ := server.NewServerFromString(addrPort)
 		output[addrPort] = thisServer
 	}
 	return output
 }
 
-func newOptions() *protocol.Options {
-	return &protocol.Options{
-		Search:              nil,
+func newOptions() *Options {
+	return &Options{
 		Timeout:             0,
 		Debug:               false,
 		MaxServerPacketSize: 512,
-	}
-}
-
-func listeningClient(resultPipe chan []byte, conn net.PacketConn) {
-	defer close(resultPipe)
-	for {
-		data := make([]byte, protocol.MaxPacketSize)
-		n, _, err := conn.ReadFrom(data)
-		if err != nil {
-			resultPipe <- []byte{}
-			log.Fatalln(err)
-		}
-
-		pkt := protocol.NewPacket()
-		err = pkt.UnmarshalBinary(data[:n])
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		data = bytes.TrimRight(data, "\x00")
-		resultPipe <- data
-
-		if pkt.Number == pkt.Total || pkt.Number == 0xFF {
-			break
-		}
 	}
 }
 
