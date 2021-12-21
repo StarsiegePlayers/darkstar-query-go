@@ -115,12 +115,6 @@ func rehashConfig(v *viper.Viper) {
 		config.serverTimeout = 5 * time.Minute
 	}
 
-	config.serverTimeout, err = time.ParseDuration(config.ServerTTL)
-	if err != nil {
-		LogComponentAlert("config", "unable to parse ServerTimeout, defaulting to 5 minutes")
-		config.serverTimeout = 5 * time.Minute
-	}
-
 	config.maintenanceTimer, err = time.ParseDuration(config.MaintenanceInterval)
 	if err != nil {
 		LogComponentAlert("config", "unable to parse MaintenanceInterval, defaulting to 60 seconds")
