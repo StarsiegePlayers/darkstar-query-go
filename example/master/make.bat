@@ -44,7 +44,7 @@ echo go build -o %output%_darwin -x -ldflags="%ldflags%"
 echo.
 set GOOS=darwin
 go build -o %output%_darwin -x -ldflags="%ldflags%"
-goto :package
+call :package
 
 :clean
 echo ---clean---
