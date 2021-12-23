@@ -93,13 +93,26 @@ func (m *MasterQuery) Query() error {
 	var err error
 	m.conn, err = net.Dial("udp", m.Address)
 	if err != nil {
-		return err
+		var dnsError *net.DNSError
+		if errors.As(err, &dnsError) {
+			if m.options.Debug {
+				return fmt.Errorf("master: [%s]: dns error during dial [%s]", dnsError.Name, err)
+			}
+			return fmt.Errorf("master: [%s]: no such host", dnsError.Name)
+		}
+		if m.options.Debug {
+			return fmt.Errorf("master: [%s]: error during dial [%s]", dnsError.Name, err)
+		}
+		return fmt.Errorf("master: [%s]: unspecified error during network connection", m.Address)
 	}
 	defer m.conn.Close()
 
 	err = m.conn.SetDeadline(time.Now().Add(m.options.Timeout))
 	if err != nil {
-		return err
+		if m.options.Debug {
+			return fmt.Errorf("master: [%s]: error during m.conn.SetDeadline [%s]", m.Address, err)
+		}
+		return fmt.Errorf("master: [%s]: unspecified error while setting connection timeout", m.Address)
 	}
 
 	query := newPacket()
@@ -120,7 +133,7 @@ func (m *MasterQuery) Query() error {
 	_, err = m.conn.Write(data)
 	if err != nil {
 		if m.options.Debug {
-			return fmt.Errorf("master: [%s]: connection Write failed: %w", m.Address, err)
+			return fmt.Errorf("master: [%s]: m.Conn.Write failed: %w", m.Address, err)
 		}
 		return fmt.Errorf("master: [%s]: connection refused", m.Address)
 	}
