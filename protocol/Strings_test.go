@@ -1,8 +1,9 @@
 package protocol
 
 import (
-	"github.com/stretchr/testify/suite"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type Protocol_StringTestSuite struct {

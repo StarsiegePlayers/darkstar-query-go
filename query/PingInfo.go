@@ -3,9 +3,10 @@ package query
 import (
 	"errors"
 	"fmt"
-	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
 	"net"
 	"time"
+
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
 )
 
 type PingInfoQuery struct {

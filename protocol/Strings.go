@@ -50,7 +50,7 @@ func ReadPascalString(input []byte) string {
 	if len(input) <= 0 {
 		return ""
 	}
-	
+
 	length, input := input[0], input[1:]
 	if length <= 0 || len(input) <= 0 {
 		return ""

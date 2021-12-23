@@ -1,9 +1,10 @@
 package protocol
 
 import (
-	"github.com/stretchr/testify/suite"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type PingInfoTestSuite struct {

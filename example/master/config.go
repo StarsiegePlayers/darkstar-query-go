@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/fsnotify/fsnotify"
-	"github.com/spf13/viper"
 	"net"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/spf13/viper"
 )
 
 type Configuration struct {

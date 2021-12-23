@@ -1,9 +1,10 @@
 package darkstar_query_go
 
 import (
+	"time"
+
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
-	"time"
 )
 
 type Query struct {

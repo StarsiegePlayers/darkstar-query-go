@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	darkstar "github.com/StarsiegePlayers/darkstar-query-go/v2"
-	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
-	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 	"net"
 	"sync"
 	"time"
+
+	darkstar "github.com/StarsiegePlayers/darkstar-query-go/v2"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 )
 
 type Service struct {

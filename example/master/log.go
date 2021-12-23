@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
+
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-colorable"
-	"log"
 )
 
 var au aurora.Aurora

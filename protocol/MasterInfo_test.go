@@ -2,9 +2,10 @@ package protocol
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 type MasterTestSite struct {

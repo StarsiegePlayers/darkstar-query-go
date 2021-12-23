@@ -2,8 +2,9 @@ package protocol
 
 import (
 	"encoding/binary"
-	"github.com/stretchr/testify/suite"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type Protocol_PacketTestSuite struct {
