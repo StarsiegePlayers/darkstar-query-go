@@ -37,14 +37,13 @@ func NewMasterQuery(address string) *MasterQuery {
 	return NewMasterQueryWithOptions(address, options)
 }
 
-func NewMasterQueryWithOptions(address string, options *protocol.Options) *MasterQuery {
-	output := &MasterQuery{
-		Master:  protocol.NewMaster(),
+func NewMasterQueryWithOptions(address string, options *protocol.Options) (output *MasterQuery) {
+	output = &MasterQuery{
+		Master:  protocol.NewMasterWithAddress(address),
 		options: options,
 		txId:    0,
 	}
-	output.Master.Address = address
-	return output
+	return
 }
 
 func (m *MasterQuery) parseResponse() error {
@@ -73,7 +72,7 @@ func (m *MasterQuery) parseResponse() error {
 			return fmt.Errorf("unspecified error parsing packet")
 		}
 
-		m.Master = protocol.NewMaster()
+		m.Master = protocol.NewMasterWithAddress(m.Address)
 		err = m.Master.UnmarshalBinary(data)
 		if err != nil {
 			if m.options.Debug {
@@ -92,7 +91,6 @@ func (m *MasterQuery) parseResponse() error {
 
 func (m *MasterQuery) Query() error {
 	var err error
-
 	m.conn, err = net.Dial("udp", m.Address)
 	if err != nil {
 		return err

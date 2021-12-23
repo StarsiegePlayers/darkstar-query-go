@@ -21,17 +21,23 @@ type Master struct {
 	MasterID   uint16
 }
 
-func NewMaster() *Master {
-	output := new(Master)
+func NewMasterWithAddress(address string) (output *Master) {
+	output = NewMaster()
+	output.Address = address
+	return
+}
+
+func NewMaster() (output *Master) {
+	output = new(Master)
 	output.Servers = make(map[string]*server.Server)
 	output.MOTDJunk = "0000000000" // anything except all <0x00> will show the MOTD
 	output.Packet = NewPacket()
-	return output
+	return
 }
 
-func (m *Master) UnmarshalBinarySet(data [][]byte) error {
+func (m *Master) UnmarshalBinarySet(data [][]byte) (err error) {
 	for _, v := range data {
-		err := m.UnmarshalBinary(v)
+		err = m.UnmarshalBinary(v)
 		if err != nil {
 			return err
 		}
@@ -39,16 +45,16 @@ func (m *Master) UnmarshalBinarySet(data [][]byte) error {
 	return nil
 }
 
-func (m *Master) UnmarshalBinary(data []byte) error {
-	err := m.Packet.UnmarshalBinary(data)
+func (m *Master) UnmarshalBinary(data []byte) (err error) {
+	err = m.Packet.UnmarshalBinary(data)
 	if err != nil {
-		return err
+		return
 	}
 
 	p := m.Packet
 	m.MasterID = p.ID
 	if len(p.Data) <= 2 {
-		return nil
+		return
 	}
 
 	// if it's the first packet (and only the first packet)
@@ -66,14 +72,14 @@ func (m *Master) UnmarshalBinary(data []byte) error {
 	}
 
 	if len(p.Data) <= 0 {
-		return nil
+		return
 	}
 	p.Data = p.Data[1:] // null header separator
 
 	serverCount := byte(0)
 	serverCount, p.Data = p.Data[0], p.Data[1:]
 	if serverCount <= 0 || len(p.Data) <= 0 {
-		return nil
+		return
 	}
 
 	for i := byte(0); i < serverCount; i++ {
@@ -98,7 +104,7 @@ func (m *Master) UnmarshalBinary(data []byte) error {
 
 	// log.Printf("Servercount: %d, datalen %d, countlen %d\n", serverCount, len(data), len(m.ServerAddresses))
 
-	return nil
+	return
 }
 
 func (m *Master) MarshalBinaryHeader() []byte {

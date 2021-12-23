@@ -5,11 +5,9 @@ import (
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 )
 
-func (q *Query) Masters() ([]*query.MasterQuery, map[string]*server.Server, []error) {
+func (q *Query) Masters() (output []*query.MasterQuery, games map[string]*server.Server, errorArray []error) {
 	availableMasters := len(q.Addresses)
 	await := make(chan *ServerResult)
-	output := make([]*query.MasterQuery, 0)
-	errorArray := make([]error, 0)
 
 	for _, address := range q.Addresses {
 		go q.performMasterQuery(address, await)
@@ -27,13 +25,13 @@ func (q *Query) Masters() ([]*query.MasterQuery, map[string]*server.Server, []er
 
 	close(await)
 
-	games := q.dedupeMasterQuery(output)
+	games = q.dedupeMasterQuery(output)
 
-	return output, games, errorArray
+	return
 }
 
-func (q *Query) dedupeMasterQuery(servers []*query.MasterQuery) map[string]*server.Server {
-	output := make(map[string]*server.Server)
+func (q *Query) dedupeMasterQuery(servers []*query.MasterQuery) (output map[string]*server.Server) {
+	output = make(map[string]*server.Server)
 	for _, svr := range servers {
 		for k, v := range svr.Servers {
 			if _, ok := output[k]; ok {
