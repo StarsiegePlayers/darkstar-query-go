@@ -1,4 +1,4 @@
-package darkstar_query_go
+package darkstar
 
 import (
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
@@ -18,6 +18,7 @@ func (q *Query) Masters() (output []*query.MasterQuery, games map[string]*server
 		if result.Master.Ping > 0 {
 			output = append(output, result.Master)
 		}
+
 		if result.Error != nil {
 			errorArray = append(errorArray, result.Error)
 		}
@@ -32,11 +33,13 @@ func (q *Query) Masters() (output []*query.MasterQuery, games map[string]*server
 
 func (q *Query) dedupeMasterQuery(servers []*query.MasterQuery) (output map[string]*server.Server) {
 	output = make(map[string]*server.Server)
+
 	for _, svr := range servers {
 		for k, v := range svr.Servers {
 			if _, ok := output[k]; ok {
 				continue
 			}
+
 			output[k] = v
 		}
 	}

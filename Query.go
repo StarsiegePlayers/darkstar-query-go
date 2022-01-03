@@ -1,4 +1,4 @@
-package darkstar_query_go
+package darkstar
 
 import (
 	"time"

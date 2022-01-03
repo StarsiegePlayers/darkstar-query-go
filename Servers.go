@@ -1,19 +1,17 @@
-package darkstar_query_go
+package darkstar
 
 import (
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
 )
 
-func (q *Query) Servers() ([]*query.PingInfoQuery, []error) {
+func (q *Query) Servers() (output []*query.PingInfoQuery, errors []error) {
 	availableServers := len(q.Addresses)
 	await := make(chan *ServerResult)
-	errors := make([]error, 0)
 
 	for _, game := range q.Addresses {
 		go q.performServerQuery(game, await)
 	}
 
-	var output []*query.PingInfoQuery
 	for i := 0; i < availableServers; i++ {
 		result := <-await
 		if result.Error != nil {
