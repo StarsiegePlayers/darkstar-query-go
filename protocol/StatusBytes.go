@@ -15,19 +15,19 @@ const (
 	Started
 	Dynamix
 	WON
-	Unknown2
-	Unknown3
+	Reserved1
+	Reserved2
 )
 
-var statusBitString = []string{
-	"Protected",
-	"Dedicated",
-	"AllowOldClients",
-	"Started",
-	"Dynamix",
-	"WON",
-	"Unknown2",
-	"Unknown3",
+var statusBitString = map[StatusBit]string{
+	Protected:       "Protected",
+	Dedicated:       "Dedicated",
+	AllowOldClients: "AllowOldClients",
+	Started:         "Started",
+	Dynamix:         "Dynamix",
+	WON:             "WON",
+	Reserved1:       "Reserved1",
+	Reserved2:       "Reserved2",
 }
 
 type StatusByteStruct struct {
@@ -37,46 +37,54 @@ type StatusByteStruct struct {
 	Started         bool
 	Dynamix         bool
 	WON             bool
-	Unknown2        bool
-	Unknown3        bool
+	Reserved1       bool
+	Reserved2       bool
 }
 
-func (s StatusByteStruct) MarshalBinary() byte {
-	output := byte(0)
+func (s StatusByteStruct) MarshalBinary() (output byte) {
+	// TODO: there's gotta be a better way to do this.
 	if s.Protected {
 		output |= byte(Protected)
 	}
+
 	if s.Dedicated {
 		output |= byte(Dedicated)
 	}
+
 	if s.AllowOldClients {
 		output |= byte(AllowOldClients)
 	}
+
 	if s.Started {
 		output |= byte(Started)
 	}
+
 	if s.Dynamix {
 		output |= byte(Dynamix)
 	}
+
 	if s.WON {
 		output |= byte(WON)
 	}
-	if s.Unknown2 {
-		output |= byte(Unknown2)
+
+	if s.Reserved1 {
+		output |= byte(Reserved1)
 	}
-	if s.Unknown3 {
-		output |= byte(Unknown3)
+
+	if s.Reserved2 {
+		output |= byte(Reserved2)
 	}
-	return output
+
+	return
 }
 
 func (s StatusByte) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Struct())
 }
 
-func (s StatusByte) Struct() StatusByteStruct {
-	output := StatusByteStruct{}
+func (s StatusByte) Struct() (output StatusByteStruct) {
 	statusArr := make(map[StatusBit]bool)
+
 	for i := 0; i < 8; i++ {
 		bit := StatusBit(1 << i)
 		if int(s)&int(bit) != 0 {
@@ -100,35 +108,41 @@ func (s StatusByte) Struct() StatusByteStruct {
 			output.Dynamix = v
 		case WON:
 			output.WON = v
-		case Unknown2:
-			output.Unknown2 = v
-		case Unknown3:
-			output.Unknown3 = v
+		case Reserved1:
+			output.Reserved1 = v
+		case Reserved2:
+			output.Reserved2 = v
 		}
 	}
-	return output
+
+	return
 }
 
-func (s StatusByte) StringSlice() []string {
-	statusArr := make([]string, 0)
+func (s StatusByte) StringSlice() (statusArr []string) {
 	for i := 0; i < 8; i++ {
 		bit := StatusBit(1 << i)
 		if int(s)&int(bit) != 0 {
-			statusArr = append(statusArr, statusBitString[i])
+			statusArr = append(statusArr, statusBitString[StatusBit(i)])
 		}
 	}
-	return statusArr
+
+	return
 }
 
 func (s StatusByte) String() string {
-	statusArr := s.StringSlice()
-	var out strings.Builder
+	var (
+		out       strings.Builder
+		statusArr = s.StringSlice()
+	)
+
 	for k, v := range statusArr {
 		if k == len(statusArr)-1 {
 			out.WriteString(v)
 			break
 		}
+
 		out.WriteString(v + " | ")
 	}
+
 	return out.String()
 }

@@ -20,7 +20,7 @@ func (t *StatusBytesTestSuite) SetupTest() {
 func (t *StatusBytesTestSuite) TestUnmarshalByte_Even() {
 	question := StatusByte(0xAA)
 
-	t.bytes.Unknown3 = true
+	t.bytes.Reserved2 = true
 	t.bytes.WON = true
 	t.bytes.Started = true
 	t.bytes.Dedicated = true
@@ -34,7 +34,7 @@ func (t *StatusBytesTestSuite) TestUnmarshalByte_Even() {
 func (t *StatusBytesTestSuite) TestUnmarshalByte_Odd() {
 	question := StatusByte(0x55)
 
-	t.bytes.Unknown2 = true
+	t.bytes.Reserved1 = true
 	t.bytes.Dynamix = true
 	t.bytes.AllowOldClients = true
 	t.bytes.Protected = true
@@ -48,11 +48,11 @@ func (t *StatusBytesTestSuite) TestUnmarshalByte_Odd() {
 func (t *StatusBytesTestSuite) TestUnmarshalByte_All() {
 	question := StatusByte(0xFF)
 
-	t.bytes.Unknown2 = true
+	t.bytes.Reserved1 = true
 	t.bytes.Dynamix = true
 	t.bytes.AllowOldClients = true
 	t.bytes.Protected = true
-	t.bytes.Unknown3 = true
+	t.bytes.Reserved2 = true
 	t.bytes.WON = true
 	t.bytes.Started = true
 	t.bytes.Dedicated = true
@@ -75,7 +75,7 @@ func (t *StatusBytesTestSuite) TestUnmarshalByte_None() {
 func (t *StatusBytesTestSuite) TestMarshalByte_Even() {
 	question := byte(0xAA)
 
-	t.bytes.Unknown3 = true
+	t.bytes.Reserved2 = true
 	t.bytes.WON = true
 	t.bytes.Started = true
 	t.bytes.Dedicated = true
@@ -88,7 +88,7 @@ func (t *StatusBytesTestSuite) TestMarshalByte_Even() {
 func (t *StatusBytesTestSuite) TestMarshalByte_Odd() {
 	question := byte(0x55)
 
-	t.bytes.Unknown2 = true
+	t.bytes.Reserved1 = true
 	t.bytes.Dynamix = true
 	t.bytes.AllowOldClients = true
 	t.bytes.Protected = true
@@ -100,11 +100,11 @@ func (t *StatusBytesTestSuite) TestMarshalByte_Odd() {
 func (t *StatusBytesTestSuite) TestMarshalByte_All() {
 	question := byte(0xFF)
 
-	t.bytes.Unknown2 = true
+	t.bytes.Reserved1 = true
 	t.bytes.Dynamix = true
 	t.bytes.AllowOldClients = true
 	t.bytes.Protected = true
-	t.bytes.Unknown3 = true
+	t.bytes.Reserved2 = true
 	t.bytes.WON = true
 	t.bytes.Started = true
 	t.bytes.Dedicated = true
