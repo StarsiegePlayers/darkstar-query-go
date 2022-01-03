@@ -35,12 +35,12 @@ func (t *PingInfoTestSuite) TestServer_PingInfoUnmarshal() {
 			Data:    question[23:],
 		},
 		GameMode:    0xfd,
-		GameName:    "es3a",
-		GameVersion: "V 001.000r",
+		GameName:    []byte("es3a"),
+		GameVersion: []byte("V 001.000r"),
 		GameStatus:  0x6,
 		PlayerCount: 0x0,
 		MaxPlayers:  0x40,
-		Name:        "DOV: City On The",
+		Name:        []byte("DOV: City On The"),
 	}
 
 	err := t.PingInfo.UnmarshalBinary(question)

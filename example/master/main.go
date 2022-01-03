@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -35,33 +36,37 @@ func main() {
 	maintenanceTimer := maintenanceInit()
 
 	addrPort := fmt.Sprintf("%s:%d", config.ListenIP, config.ListenPort)
+
 	pconn, err := net.ListenPacket("udp", addrPort)
 	if err != nil {
 		LogComponentAlert("server", "unable to bind to %s - [%s]", addrPort, err)
 	}
+
 	LogComponent("server", "now listening on [%s]", addrPort)
 
 	// setup kill / rehash hooks
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
-		for serviceRunning == true {
+		for serviceRunning {
 			sig := <-c
 			LogComponentAlert("server", "received [%s]", sig.String())
+
 			switch sig {
 			case os.Interrupt:
 				fallthrough
-			case os.Kill:
-				fallthrough
 			case syscall.SIGTERM:
 				LogComponentAlert("server", "shutdown initiated...")
+
 				err = pconn.Close()
 				if err != nil {
 					log.Fatalln(err)
 				}
+
 				serviceRunning = false
+
 				maintenanceShutdown(maintenanceTimer)
-				break
 			}
 		}
 	}()
@@ -70,27 +75,27 @@ func main() {
 	buf := make([]byte, config.MaxPacketSize)
 	buf2 := make([]byte, config.MaxPacketSize)
 	prevIPPort := ""
+
 	for serviceRunning {
 		n, addr, err := pconn.ReadFrom(buf)
 		if err != nil {
-			switch t := err.(type) {
-			case *net.OpError:
-				if t.Op == "read" {
-					LogComponentAlert("server", "socket closed.")
-				}
+			t := &net.OpError{}
+			if errors.As(err, &t) && t.Op == "read" {
+				LogComponentAlert("server", "socket closed.")
 				continue
-			default:
-				LogComponentAlert("server", "read error on socket [%s]", err)
 			}
+			LogComponentAlert("server", "read error on socket [%s]", err)
 		}
 
-		//dedupe packets because wtf dynamix
+		// dedupe packets because wtf dynamix
 		if prevIPPort == addr.String() && bytes.Equal(buf2[:n], buf[:n]) {
 			// blank out the stored header and discord the packet silently
 			prevIPPort = ""
 			continue
 		}
+
 		copy(buf2, buf)
+
 		prevIPPort = addr.String()
 
 		if addr, ok := addr.(*net.UDPAddr); ok {

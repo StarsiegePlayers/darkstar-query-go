@@ -13,15 +13,15 @@ const (
 	GameInfoResponse
 )
 
-var packetTypeString = []string{
-	"PingInfoQuery",
-	"PingInfoResponse",
-	"MasterServerHeartbeat",
-	"MasterServerList",
-	"GameInfoQuery",
-	"GameInfoResponse",
+var packetTypeString = map[PacketType]string{
+	PingInfoQuery:         "PingInfoQuery",
+	PingInfoResponse:      "PingInfoResponse",
+	MasterServerHeartbeat: "MasterServerHeartbeat",
+	MasterServerList:      "MasterServerList",
+	GameInfoQuery:         "GameInfoQuery",
+	GameInfoResponse:      "GameInfoResponse",
 }
 
 func (p PacketType) String() string {
-	return packetTypeString[int(p)-int(PingInfoQuery)]
+	return packetTypeString[PacketType(int(p)-int(PingInfoQuery))]
 }

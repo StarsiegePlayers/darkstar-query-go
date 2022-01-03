@@ -24,6 +24,7 @@ type Master struct {
 func NewMasterWithAddress(address string) (output *Master) {
 	output = NewMaster()
 	output.Address = address
+
 	return
 }
 
@@ -32,6 +33,7 @@ func NewMaster() (output *Master) {
 	output.Servers = make(map[string]*server.Server)
 	output.MOTDJunk = "0000000000" // anything except all <0x00> will show the MOTD
 	output.Packet = NewPacket()
+
 	return
 }
 
@@ -42,7 +44,8 @@ func (m *Master) UnmarshalBinarySet(data [][]byte) (err error) {
 			return err
 		}
 	}
-	return nil
+
+	return
 }
 
 func (m *Master) UnmarshalBinary(data []byte) (err error) {
@@ -53,17 +56,18 @@ func (m *Master) UnmarshalBinary(data []byte) (err error) {
 
 	p := m.Packet
 	m.MasterID = p.ID
+
 	if len(p.Data) <= 2 {
 		return
 	}
 
 	// if it's the first packet (and only the first packet)
 	// parse out the common name and MOTD
-	if p.Number == 0x01 {
+	if p.Number == 1 {
 		m.CommonName, p.Data = ReadPascalStringStream(p.Data)
 		m.CommonName = strings.ReplaceAll(m.CommonName, `\n`, "")
-
 		m.MOTD, p.Data = ReadPascalStringStream(p.Data)
+
 		m.MOTD = strings.ReplaceAll(m.MOTD, `\n`, " ")
 		if len(m.MOTD) > 10 {
 			// the first 10 characters are classified as "junk"
@@ -71,14 +75,15 @@ func (m *Master) UnmarshalBinary(data []byte) (err error) {
 		}
 	}
 
-	if len(p.Data) <= 0 {
+	if len(p.Data) == 0 {
 		return
 	}
-	p.Data = p.Data[1:] // null header separator
 
+	p.Data = p.Data[1:] // null header separator
 	serverCount := byte(0)
 	serverCount, p.Data = p.Data[0], p.Data[1:]
-	if serverCount <= 0 || len(p.Data) <= 0 {
+
+	if serverCount <= 0 || len(p.Data) == 0 {
 		return
 	}
 
@@ -107,7 +112,7 @@ func (m *Master) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-func (m *Master) MarshalBinaryHeader() []byte {
+func (m *Master) MarshalBinaryHeader() (output []byte) {
 	// field 01 - pascal common name, string
 	commonName := make([]byte, len(m.CommonName)+1)
 	commonName[0] = byte(len(m.CommonName))
@@ -124,11 +129,11 @@ func (m *Master) MarshalBinaryHeader() []byte {
 	}
 
 	// combine
-	output := make([]byte, len(commonName)+len(motd))
+	output = make([]byte, len(commonName)+len(motd))
 	copy(output, commonName)
 	copy(output[len(commonName):], motd)
 
-	return output
+	return
 }
 
 func (m *Master) MarshalBinarySet(input map[string]*server.Server) []byte {
@@ -136,6 +141,7 @@ func (m *Master) MarshalBinarySet(input map[string]*server.Server) []byte {
 	for k := range input {
 		set = append(set, k)
 	}
+
 	sort.Strings(set)
 
 	// work with a byte buffer
@@ -180,6 +186,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 	for k := range m.Servers {
 		serverAddresses = append(serverAddresses, k)
 	}
+
 	sort.Strings(serverAddresses)
 
 	output := make([][]byte, 0)
@@ -212,13 +219,14 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 	// simple logic for non spanned packets
 	if overflowPackets <= 0 {
 		// setting pkt 1 of 1 is distinctly different from ping/game info
-		pkt.Number = 0x01
-		pkt.Total = 0x01
+		pkt.Number = 1
+		pkt.Total = 1
 		dataset := m.MarshalBinarySet(m.Servers)
 		tempData := make([]byte, len(header)+len(dataset))
 		copy(tempData[0:len(header)], header)
 		copy(tempData[len(header):len(header)+len(dataset)], dataset)
 		pkt.Data = tempData
+
 		binOut, err := pkt.MarshalBinary()
 		if err != nil {
 			// todo: log
@@ -232,15 +240,17 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 	}
 
 	// otherwise, time to do some convoluted craziness
-	pkt.Number = 0x01                 // start at 0x1
+	pkt.Number = 1                    // start at 0x1
 	pkt.Total = byte(overflowPackets) // overflow packets should be > 2
 
 	// deep copy the first subset of addresses
 	tmpAddresses := make(map[string]*server.Server)
+
 	for k, v := range localAddresses {
 		if uint16(k) >= firstPacketMax {
 			break
 		}
+
 		tmpAddresses[v] = m.Servers[v]
 	}
 
@@ -255,11 +265,13 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 
 	// copy to output
 	pkt.Data = tempData
+
 	binOut, err := pkt.MarshalBinary()
 	if err != nil {
 		// todo: log
 		return [][]byte{}
 	}
+
 	output = append(output, binOut)
 
 	// do the above for each overflow packet
@@ -273,12 +285,15 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 
 		// copy the next subset of overflow addresses
 		tmpAddresses = make(map[string]*server.Server)
+
 		for k, v := range localAddresses {
 			if uint16(k) >= overflowPacketMax {
 				break
 			}
+
 			tmpAddresses[v] = m.Servers[v]
 		}
+
 		localAddresses = localAddresses[overflowPacketMax:]
 
 		// marshal and send
@@ -288,6 +303,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 			// todo: log
 			return [][]byte{}
 		}
+
 		output = append(output, binOut)
 	}
 

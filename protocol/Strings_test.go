@@ -155,9 +155,11 @@ func (t Protocol_StringTestSuite) TestProtocol_ReadPascalStringStream_WithoutRem
 }
 
 func (t Protocol_StringTestSuite) TestProtocol_ReadPascalStringStream_NullByte() {
-	question := []byte{0x00}
-	response := ""
-	remainder := []byte{}
+	var (
+		question  = []byte{0x00}
+		remainder = []byte{}
+		response  = ""
+	)
 
 	output, remainder_output := ReadPascalStringStream(question)
 	t.Assert().Equal(response, output)
@@ -165,9 +167,11 @@ func (t Protocol_StringTestSuite) TestProtocol_ReadPascalStringStream_NullByte()
 }
 
 func (t Protocol_StringTestSuite) TestProtocol_ReadPascalStringStream_Empty() {
-	var question []byte
-	response := ""
-	var remainder []byte
+	var (
+		question  []byte
+		remainder []byte
+		response  = ""
+	)
 
 	output, remainder_output := ReadPascalStringStream(question)
 	t.Assert().Equal(response, output)

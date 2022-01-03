@@ -13,27 +13,25 @@ import (
 type Configuration struct {
 	sync.Mutex
 
-	ListenIP   string
-	ListenPort uint16
+	ColorLogs bool
 
+	ListenPort    uint16
 	MaxPacketSize uint16
 	MaxBufferSize uint16
+	ID            uint16
+	ServersPerIP  uint16
 
+	ListenIP  string
 	Hostname  string
 	MOTD      string
 	ServerTTL string
 
 	MaintenanceInterval string
-
-	ID           uint16
-	ServersPerIP uint16
-
-	BannedNetworks []string
-	BannedMessage  string
-
-	ColorLogs bool
+	BannedMessage       string
+	BannedNetworks      []string
 
 	parsedBannedNets []*net.IPNet
+	localAddresses   []*net.Addr
 	serverTimeout    time.Duration
 	maintenanceTimer time.Duration
 }
@@ -58,7 +56,7 @@ func configInit() {
 	v.SetDefault("MaxPacketSize", 512)
 	v.SetDefault("MaxBufferSize", 32768)
 	v.SetDefault("ServerTTL", 5*time.Minute)
-	v.SetDefault("MaintenanceInterval", 60*time.Second)
+	v.SetDefault("MaintenanceInterval", time.Minute)
 	v.SetDefault("Hostname", "SlimThiccMaster")
 	v.SetDefault("MOTD", "Welcome to Neo's MiniMaster")
 	v.SetDefault("BannedMessage", "Welcome to bansville, population: you\\nVisit the discord to appeal!")
@@ -84,6 +82,7 @@ func rehashConfig(v *viper.Viper) {
 	err := v.ReadInConfig()
 	if _, configFileNotFound := err.(viper.ConfigFileNotFoundError); err != nil && configFileNotFound {
 		LogComponentAlert("config", "config file not found, creating...")
+
 		err := v.WriteConfigAs(DefaultConfigFileName)
 		if err != nil {
 			LogComponentAlert("config", "unable to create config! [%s]", err)
@@ -95,6 +94,7 @@ func rehashConfig(v *viper.Viper) {
 
 	config = new(Configuration)
 	config.Lock()
+
 	err = v.Unmarshal(&config)
 	if err != nil {
 		LogComponentAlert("config", "error unmarshalling config [%s]", err)
@@ -107,19 +107,22 @@ func rehashConfig(v *viper.Viper) {
 			LogComponentAlert("config", "unable to parse BannedNetwork %s, %s", v, err)
 			os.Exit(1)
 		}
+
 		config.parsedBannedNets = append(config.parsedBannedNets, network)
 	}
 
 	config.serverTimeout, err = time.ParseDuration(config.ServerTTL)
 	if err != nil {
 		LogComponentAlert("config", "unable to parse ServerTimeout, defaulting to 5 minutes")
+
 		config.serverTimeout = 5 * time.Minute
 	}
 
 	config.maintenanceTimer, err = time.ParseDuration(config.MaintenanceInterval)
 	if err != nil {
 		LogComponentAlert("config", "unable to parse MaintenanceInterval, defaulting to 60 seconds")
-		config.serverTimeout = 60 * time.Second
+
+		config.serverTimeout = time.Minute
 	}
 
 	thisMaster.Lock()

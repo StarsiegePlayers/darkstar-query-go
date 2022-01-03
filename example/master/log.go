@@ -23,6 +23,7 @@ func serverColor(input string) uint8 {
 	for _, c := range input {
 		o += byte(c)
 	}
+
 	return (((o % 36) * 36) + (o % 6) + 16) % 255
 }
 

@@ -4,11 +4,13 @@ import (
 	"time"
 )
 
-func maintenanceInit() *time.Ticker {
-	t := time.NewTicker(time.Duration(60) * time.Second)
+func maintenanceInit() (t *time.Ticker) {
 	LogComponent("maintenance", "will run every 60 seconds")
+
+	t = time.NewTicker(time.Minute)
 	go performMaintenance(t)
-	return t
+
+	return
 }
 
 func maintenanceShutdown(t *time.Ticker) {
@@ -23,8 +25,7 @@ func performMaintenance(t *time.Ticker) {
 	}
 }
 
-func cleanUpStaleServers() int {
-	count := 0
+func cleanUpStaleServers() (count int) {
 	for k, v := range thisMaster.Service.Servers {
 		if v.IsExpired(config.serverTimeout) {
 			thisMaster.Lock()
@@ -32,12 +33,14 @@ func cleanUpStaleServers() int {
 			delete(thisMaster.Service.Servers, k)
 			delete(thisMaster.SolicitedServers, k)
 			thisMaster.IPServiceCount[k]--
+
 			if thisMaster.IPServiceCount[k] <= 0 {
 				delete(thisMaster.IPServiceCount, k)
 			}
+
 			thisMaster.Unlock()
 			count++
 		}
 	}
-	return count
+	return
 }

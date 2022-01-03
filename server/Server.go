@@ -6,7 +6,7 @@ import (
 )
 
 type Server struct {
-	Address    *net.UDPAddr
+	Address    net.Addr
 	Connection *net.PacketConn `json:"-" csv:"-"`
 	LastSeen   time.Time
 }
@@ -24,13 +24,15 @@ func NewServerFromString(input string) (*Server, error) {
 	}, nil
 }
 
-func NewServersMapFromList(input []string) map[string]*Server {
-	output := make(map[string]*Server)
+func NewServersMapFromList(input []string) (output map[string]*Server) {
+	output = make(map[string]*Server)
+
 	for _, v := range input {
 		thisServer, _ := NewServerFromString(v)
 		output[v] = thisServer
 	}
-	return output
+
+	return
 }
 
 func (s Server) IsExpired(ttl time.Duration) bool {

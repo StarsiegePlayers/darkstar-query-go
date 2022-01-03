@@ -2,19 +2,20 @@ package protocol
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
 type PingInfo struct {
-	*Packet     `json:"-" csv:"-"`
 	GameMode    byte          `csv:"-"` // ??
-	GameName    string        `csv:"-"` // es3a
-	GameVersion string        `csv:"-"` // V 001.000r
-	GameStatus  StatusByte    `csv:"status"`
 	PlayerCount byte          `csv:"cur_players"`
 	MaxPlayers  byte          `csv:"max_players"`
-	Name        string        `csv:"server_name"`
+	GameName    []byte        `csv:"-"` // es3a
+	GameVersion []byte        `csv:"-"` // V 001.000r
+	Name        []byte        `csv:"server_name"`
+	GameStatus  StatusByte    `csv:"status"`
 	Ping        time.Duration `csv:"ping"`
+	*Packet     `json:"-" csv:"-"`
 }
 
 func (s *PingInfo) String() string {
@@ -35,14 +36,14 @@ func (s *PingInfo) UnmarshalBinary(data []byte) error {
 
 	p := s.Packet
 	s.GameMode = p.Total
-	s.PlayerCount = byte(p.ID & 0xff)
-	s.MaxPlayers = byte((p.ID >> 8) & 0xff)
+	s.PlayerCount = byte(p.ID & math.MaxUint8)
+	s.MaxPlayers = byte((p.ID >> 8) & math.MaxUint8)
 
-	s.GameName, p.Data = string(p.Data[0:4]), p.Data[4:]
+	s.GameName, p.Data = p.Data[0:4], p.Data[4:]
 	s.GameStatus, p.Data = StatusByte(p.Data[0]), p.Data[1:]
-	s.GameVersion, p.Data = string(p.Data[0:10]), p.Data[10:]
+	s.GameVersion, p.Data = p.Data[0:10], p.Data[10:]
 
-	s.Name = string(p.Data[:Clen(p.Data)])
+	s.Name = p.Data[:Clen(p.Data)]
 
 	return nil
 }

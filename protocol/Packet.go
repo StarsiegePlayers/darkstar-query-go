@@ -19,12 +19,12 @@ var ErrorEmptyPacket = errors.New("empty packet received")
 
 type Packet struct {
 	Version byte
-	Type    PacketType
 	Number  byte   // packet number out of total; starts at 1
 	Total   byte   // total packets of info
 	Key     uint16 // used for verification and (transaction) id purposes
 	ID      uint16 // master server id (read from config file)
 	Data    []byte // MaxSize = (MaxPacketSize - HeaderSize)
+	Type    PacketType
 
 	// implements
 	encoding.BinaryMarshaler   `json:"-" csv:"-"`
@@ -38,26 +38,29 @@ func NewPacket() *Packet {
 	}
 }
 
-func NewPacketWithData(data []byte) (*Packet, error) {
-	out := NewPacket()
-	err := out.UnmarshalBinary(data)
-	return out, err
+func NewPacketWithData(data []byte) (out *Packet, err error) {
+	out = NewPacket()
+	err = out.UnmarshalBinary(data)
+
+	return
 }
 
 func (p *Packet) MarshalBinary() ([]byte, error) {
-	out := make([]byte, 8+len(p.Data))
+	out := make([]byte, HeaderSize+len(p.Data))
 	out[0] = p.Version
 	out[1] = byte(p.Type)
 	out[2] = p.Number
 	out[3] = p.Total
 	binary.BigEndian.PutUint16(out[4:4+2], p.Key) // BigE - key byte numbers 5-6
 	binary.BigEndian.PutUint16(out[6:6+2], p.ID)  // BigE - ID byte numbers 7-8
-	copy(out[8:], p.Data)
+	copy(out[HeaderSize:], p.Data)
+
 	return out, nil
 }
 
 func (p *Packet) UnmarshalBinary(data []byte) error {
 	data = bytes.Trim(data, "\x00")
+
 	if len(data) < 0 {
 		return ErrorEmptyPacket
 	}
@@ -70,6 +73,7 @@ func (p *Packet) UnmarshalBinary(data []byte) error {
 	}
 
 	p.Data = make([]byte, len(data)-HeaderSize)
+
 	if data[0] != Version && data[0] != VersionExt {
 		return ErrorUnknownPacketVersion
 	}
@@ -90,5 +94,6 @@ func (p *Packet) String() string {
 	if err != nil {
 		return "![unable to create packet]"
 	}
+
 	return fmt.Sprintf("%x", packet)
 }

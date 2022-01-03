@@ -46,10 +46,8 @@ func performServerListUpdate() ServerListData {
 	}
 
 	masterServerInfo, gameAddresses, errs := q.Masters()
-	if len(errs) >= 0 {
-		for _, v := range errs {
-			errors = append(errors, v.Error())
-		}
+	for _, v := range errs {
+		errors = append(errors, v.Error())
 	}
 
 	q = darkstar.NewQuery(timeout, debug)
@@ -81,6 +79,7 @@ func recordServerListUpdate(data ServerListData) {
 		currentTime := time.Now()
 
 		directory := fmt.Sprintf("./stats/%s", currentTime.Format(ServerStatsPathFormat))
+
 		err := os.MkdirAll(directory, 755)
 		if err != nil {
 			log.Println("Error", err.Error())
@@ -88,6 +87,7 @@ func recordServerListUpdate(data ServerListData) {
 
 		fileName := strings.Replace(s.Address, ":", "_", 1)
 		filePath := fmt.Sprintf("%s/%s.csv", directory, fileName)
+
 		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
 			log.Println("Error", err.Error())
@@ -99,11 +99,14 @@ func recordServerListUpdate(data ServerListData) {
 		_, err = f.WriteString(output)
 		if err != nil {
 			log.Println("error", err.Error())
+
 			_ = f.Close()
+
 			continue
 		}
 
 		log.Printf("Wrote file %s\n", filePath)
+
 		_ = f.Close()
 	}
 }
