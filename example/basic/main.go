@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	darkstar "github.com/StarsiegePlayers/darkstar-query-go/v2"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2"
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/query"
 )
 

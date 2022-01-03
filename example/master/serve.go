@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	darkstar "github.com/StarsiegePlayers/darkstar-query-go/v2"
+	"github.com/StarsiegePlayers/darkstar-query-go/v2"
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/protocol"
 	"github.com/StarsiegePlayers/darkstar-query-go/v2/server"
 )
