@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -136,7 +137,9 @@ func (m *Master) MarshalBinaryHeader() (output []byte) {
 	return
 }
 
-func (m *Master) MarshalBinarySet(input map[string]*server.Server) []byte {
+// MarshalBinarySet generates the body of a darkstar master packet
+// laddr will correct a server registered as a localhost server with the specified address (generally, an external or LAN IP)
+func (m *Master) MarshalBinarySet(input map[string]*server.Server, laddr *net.Addr) (output []byte) {
 	set := make([]string, 0)
 	for k := range input {
 		set = append(set, k)
@@ -149,22 +152,26 @@ func (m *Master) MarshalBinarySet(input map[string]*server.Server) []byte {
 
 	for index, hostPort := range set {
 		// split ip:port
-		temp := strings.Split(hostPort, ":")
-		port := temp[1]
-		host := strings.Split(temp[0], ".")
+		stringHost, port, err := net.SplitHostPort(hostPort)
+		if err != nil {
+			continue
+		}
+
+		// if we are about to send out a host registered as localhost
+		// swap it out for the host in laddr
+		if laddr != nil && *laddr != nil && stringHost == "127.0.0.1" {
+			hostNet := strings.Split((*laddr).String(), "/")
+			stringHost = hostNet[0]
+		}
+
+		host := net.ParseIP(stringHost)
 
 		// individual entry byte buffer
 		out := make([]byte, 7)
 
 		// <length: 0x06><4 bytes ipv4 addr><2 bytes port>
-		out[0] = byte(6)
-		for k2, v2 := range host {
-			h, err := strconv.Atoi(v2)
-			if err != nil {
-				continue
-			}
-			out[k2+1] = byte(h)
-		}
+		out[0] = byte(len(out) - 1)
+		copy(out[1:], host.To4())
 
 		// ports are sent as a uint16 little endian stream
 		p, _ := strconv.Atoi(port)
@@ -174,14 +181,14 @@ func (m *Master) MarshalBinarySet(input map[string]*server.Server) []byte {
 		copy(hold[index*7:index*7+7], out)
 	}
 
-	output := make([]byte, len(hold)+1)
+	output = make([]byte, len(hold)+1)
 	output[0] = byte(len(set))
 	copy(output[1:], hold)
 
-	return output
+	return
 }
 
-func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
+func (m *Master) GeneratePackets(options *Options, key uint16, laddr *net.Addr) [][]byte {
 	serverAddresses := make([]string, 0)
 	for k := range m.Servers {
 		serverAddresses = append(serverAddresses, k)
@@ -201,8 +208,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 	overflowPacketMax := (options.MaxServerPacketSize - (HeaderSize + 2)) / 7
 
 	// calculate overflow from first packet
-	overflowSize := len(serverAddresses) - int(firstPacketMax)
-	overflowPackets := 0
+	overflowPackets, overflowSize := 0, len(serverAddresses)-int(firstPacketMax)
 	if overflowSize > 0 {
 		overflowPackets = int(math.Ceil(float64(overflowSize)/float64(overflowPacketMax))) + 1
 	}
@@ -221,7 +227,8 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 		// setting pkt 1 of 1 is distinctly different from ping/game info
 		pkt.Number = 1
 		pkt.Total = 1
-		dataset := m.MarshalBinarySet(m.Servers)
+		dataset := m.MarshalBinarySet(m.Servers, laddr)
+
 		tempData := make([]byte, len(header)+len(dataset))
 		copy(tempData[0:len(header)], header)
 		copy(tempData[len(header):len(header)+len(dataset)], dataset)
@@ -258,7 +265,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 	localAddresses = localAddresses[firstPacketMax:]
 
 	// marshal data
-	dataset := m.MarshalBinarySet(tmpAddresses)
+	dataset := m.MarshalBinarySet(tmpAddresses, laddr)
 	tempData := make([]byte, len(header)+len(dataset))
 	copy(tempData[0:len(header)], header)
 	copy(tempData[len(header):len(header)+len(dataset)], dataset)
@@ -297,7 +304,8 @@ func (m *Master) GeneratePackets(options *Options, key uint16) [][]byte {
 		localAddresses = localAddresses[overflowPacketMax:]
 
 		// marshal and send
-		pkt.Data = m.MarshalBinarySet(tmpAddresses)
+		pkt.Data = m.MarshalBinarySet(tmpAddresses, laddr)
+
 		binOut, err = pkt.MarshalBinary()
 		if err != nil {
 			// todo: log

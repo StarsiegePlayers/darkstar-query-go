@@ -28,12 +28,14 @@ var thisMaster = Service{
 	SolicitedServers: make(map[string]bool),
 }
 
-func serve(conn *net.PacketConn, addr *net.UDPAddr, buf []byte) {
+func serve(conn *net.PacketConn, addr net.Addr, buf []byte) {
 	// we use an ip-port combo as a unique identifier
-	ipPort := fmt.Sprintf("%s:%d", addr.IP.String(), addr.Port)
+	udpAddr := addr.(*net.UDPAddr)
+	ipPort := fmt.Sprintf("%s:%d", udpAddr.IP.String(), udpAddr.Port)
 
 	// parse packet
 	p := protocol.NewPacket()
+
 	err := p.UnmarshalBinary(buf)
 	if err != nil {
 		switch err {
@@ -44,12 +46,14 @@ func serve(conn *net.PacketConn, addr *net.UDPAddr, buf []byte) {
 		default:
 			LogServerAlert(ipPort, "Error %s while parsing packet", err)
 		}
+
 		return
 	}
 
 	isBanned := false
+
 	for _, v := range config.parsedBannedNets {
-		if v.Contains(addr.IP) {
+		if v.Contains(udpAddr.IP) {
 			isBanned = true
 		}
 	}
@@ -58,32 +62,34 @@ func serve(conn *net.PacketConn, addr *net.UDPAddr, buf []byte) {
 	// server has sent in a heartbeat
 	case protocol.MasterServerHeartbeat:
 		if isBanned {
-			LogServerAlert(addr.IP.String(), "Received a %s packet from banned host", p.Type.String())
+			LogServerAlert(udpAddr.IP.String(), "Received a %s packet from banned host", p.Type.String())
 			return
 		}
+
 		registerHeartbeat(conn, addr, ipPort, p)
-		break
 
 	// client is requesting a server list
 	case protocol.PingInfoQuery:
 		if isBanned {
-			LogServerAlert(addr.IP.String(), "Received a %s packet from banned host", p.Type.String())
+			LogServerAlert(udpAddr.IP.String(), "Received a %s packet from banned host", p.Type.String())
 			sendBanned(conn, addr, ipPort, p)
+
 			return
 		}
+
 		sendList(conn, addr, ipPort, p)
-		break
 
 	default:
 		if isBanned {
 			LogServerAlert(ipPort, "Received unsolicited packet type %s from banned host", p.Type.String())
 			return
 		}
+
 		LogServerAlert(ipPort, "Received unsolicited packet type %s", p.Type.String())
 	}
 }
 
-func registerHeartbeat(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
+func registerHeartbeat(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Packet) {
 	thisMaster.Lock()
 	thisMaster.SolicitedServers[ipPort] = true
 	thisMaster.Unlock()
@@ -91,7 +97,8 @@ func registerHeartbeat(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p
 	q := darkstar.NewQuery(2*time.Second, true)
 	q.Addresses = append(q.Addresses, ipPort)
 	response, err := q.Servers()
-	if len(err) > 0 || len(response) <= 0 {
+
+	if len(err) > 0 || len(response) == 0 {
 		LogServerAlert(ipPort, "error during server verification [%s, %d]", err, len(response))
 		return
 	}
@@ -99,18 +106,23 @@ func registerHeartbeat(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p
 	registerPingInfo(conn, addr, ipPort, p)
 }
 
-func registerPingInfo(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
+func registerPingInfo(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Packet) {
+	udpAddr := addr.(*net.UDPAddr)
+
 	thisMaster.Lock()
+
 	if _, exist := thisMaster.Service.Servers[ipPort]; !exist {
-		count := thisMaster.IPServiceCount[addr.IP.String()]
-		if uint16(count)+1 > config.ServersPerIP {
+		count := thisMaster.IPServiceCount[udpAddr.IP.String()]
+		if count+1 > config.ServersPerIP {
 			LogServerAlert(ipPort, "Rejecting additional server for IP - count: %d/%d", count, config.ServersPerIP)
 			thisMaster.Unlock()
+
 			return
 		}
 
 		// log and add new
 		LogServer(ipPort, "Heartbeat - New Server")
+
 		thisMaster.Service.Servers[ipPort] = &server.Server{
 			Address:    addr,
 			Connection: conn,
@@ -118,18 +130,18 @@ func registerPingInfo(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p 
 		}
 		count++
 		LogServer(ipPort, "New Server for IP - total server count for IP: %d/%d", count, config.ServersPerIP)
-		thisMaster.IPServiceCount[addr.IP.String()] = count
+		thisMaster.IPServiceCount[udpAddr.IP.String()] = count
 	}
 
 	s := thisMaster.Service.Servers[ipPort]
-	LogServer(ipPort, "Heartbeat - delta: %s", time.Now().Sub(s.LastSeen).String())
+	LogServer(ipPort, "Heartbeat - delta: %s", time.Since(s.LastSeen).String())
 	s.LastSeen = time.Now()
 	thisMaster.Service.Servers[ipPort] = s
 	thisMaster.Unlock()
 }
 
-func sendList(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
-	packets := thisMaster.Service.GeneratePackets(thisMaster.Options, p.Key)
+func sendList(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Packet) {
+	packets := thisMaster.Service.GeneratePackets(thisMaster.Options, p.Key, findLocalAddress(addr))
 	for _, v := range packets {
 		_, err := (*conn).WriteTo(v, addr)
 		if err != nil {
@@ -137,11 +149,12 @@ func sendList(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protoco
 			return
 		}
 	}
+
 	LogServer(ipPort, "servers list sent")
 }
 
-func sendBanned(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *protocol.Packet) {
-	packets := thisMaster.BannedService.GeneratePackets(thisMaster.Options, p.Key)
+func sendBanned(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Packet) {
+	packets := thisMaster.BannedService.GeneratePackets(thisMaster.Options, p.Key, nil)
 	for _, v := range packets {
 		_, err := (*conn).WriteTo(v, addr)
 		if err != nil {
@@ -149,5 +162,18 @@ func sendBanned(conn *net.PacketConn, addr *net.UDPAddr, ipPort string, p *proto
 			return
 		}
 	}
+
 	LogServer(ipPort, "banned message sent")
+}
+
+func findLocalAddress(input net.Addr) *net.Addr {
+	raddr := net.ParseIP(input.String())
+
+	for _, laddr := range config.localAddresses {
+		if l, ok := (*laddr).(*net.IPNet); ok && l.Contains(raddr) {
+			return laddr
+		}
+	}
+
+	return nil
 }

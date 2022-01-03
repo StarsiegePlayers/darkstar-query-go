@@ -136,5 +136,29 @@ func rehashConfig(v *viper.Viper) {
 
 	thisMaster.Options.MaxServerPacketSize = config.MaxPacketSize
 	thisMaster.Unlock()
+
+	config.localAddresses = generateLocalAddresses()
 	config.Unlock()
+}
+
+func generateLocalAddresses() (output []*net.Addr) {
+	output = make([]*net.Addr, 0)
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for k := range addrs {
+			output = append(output, &addrs[k])
+		}
+	}
+
+	return
 }
