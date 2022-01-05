@@ -1,13 +1,14 @@
 package server
 
 import (
+	"encoding/json"
 	"net"
 	"time"
 )
 
 type Server struct {
 	Address    net.Addr
-	Connection *net.PacketConn `json:"-" csv:"-"`
+	Connection *net.PacketConn `csv:"-"`
 	LastSeen   time.Time
 }
 
@@ -41,4 +42,14 @@ func (s Server) IsExpired(ttl time.Duration) bool {
 
 func (s Server) String() string {
 	return s.Address.String()
+}
+
+func (s *Server) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Address  string
+		LastSeen time.Time
+	}{
+		Address:  s.Address.String(),
+		LastSeen: s.LastSeen,
+	})
 }

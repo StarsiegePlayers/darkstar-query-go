@@ -15,8 +15,6 @@ type PingInfoQuery struct {
 
 	*protocol.PingInfo
 
-	Ping         time.Duration
-	Address      string
 	conn         net.Conn
 	requestStart time.Time
 	requestEnd   time.Time
@@ -34,10 +32,11 @@ func NewPingInfoQuery(address string) *PingInfoQuery {
 
 func NewPingInfoQueryWithOptions(address string, options *protocol.Options) *PingInfoQuery {
 	output := &PingInfoQuery{
-		Address:  address,
-		options:  options,
-		txID:     0,
-		PingInfo: &protocol.PingInfo{},
+		options: options,
+		txID:    0,
+		PingInfo: &protocol.PingInfo{
+			Address: address,
+		},
 	}
 
 	return output

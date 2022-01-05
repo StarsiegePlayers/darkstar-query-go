@@ -16,12 +16,13 @@ type PingInfo struct {
 	GameName    []byte        `csv:"-"` // es3a
 	GameVersion []byte        `csv:"-"` // V 001.000r
 	Name        []byte        `csv:"server_name"`
+	Address     string        `csv:"address"`
 	*Packet     `json:"-" csv:"-"`
 }
 
 func (s *PingInfo) String() string {
 	return fmt.Sprintf("PingInfoResponse: %s [%s] (%s) Players: %d/%d",
-		s.Name, s.Ping, s.GameStatus, s.PlayerCount, s.MaxPlayers)
+		string(s.Name), s.Ping, s.GameStatus, s.PlayerCount, s.MaxPlayers)
 }
 
 func (s *PingInfo) MarshalBinary() ([]byte, error) {
@@ -54,19 +55,20 @@ func (s *PingInfo) MarshalJSON() ([]byte, error) {
 		GameMode    byte
 		PlayerCount byte
 		MaxPlayers  byte
+		GameStatus  StatusByte
 		GameName    string
 		GameVersion string
 		Name        string
-		GameStatus  StatusByte
-		Ping        time.Duration
+		Address     string
+		Ping        string
 	}{
 		GameMode:    s.GameMode,
 		PlayerCount: s.PlayerCount,
 		MaxPlayers:  s.MaxPlayers,
+		GameStatus:  s.GameStatus,
 		GameName:    string(s.GameName),
 		GameVersion: string(s.GameVersion),
 		Name:        string(s.Name),
-		GameStatus:  s.GameStatus,
-		Ping:        s.Ping,
+		Ping:        s.Ping.String(),
 	})
 }

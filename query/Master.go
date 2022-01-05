@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -167,4 +168,14 @@ func (m *MasterQuery) Query() (err error) {
 	m.Ping = m.requestEnd.Sub(m.requestStart)
 
 	return
+}
+
+func (m *MasterQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		*protocol.Master
+		Ping string
+	}{
+		Master: m.Master,
+		Ping:   m.Ping.String(),
+	})
 }
