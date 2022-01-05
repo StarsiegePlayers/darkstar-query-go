@@ -60,7 +60,7 @@ func (s *PingInfo) MarshalJSON() ([]byte, error) {
 		GameVersion string
 		Name        string
 		Address     string
-		Ping        string
+		Ping        time.Duration
 	}{
 		GameMode:    s.GameMode,
 		PlayerCount: s.PlayerCount,
@@ -70,6 +70,6 @@ func (s *PingInfo) MarshalJSON() ([]byte, error) {
 		GameVersion: string(s.GameVersion),
 		Name:        string(s.Name),
 		Address:     s.Address,
-		Ping:        s.Ping.String(),
+		Ping:        s.Ping,
 	})
 }
