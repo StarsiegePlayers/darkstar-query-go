@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -10,11 +11,11 @@ type PingInfo struct {
 	GameMode    byte          `csv:"-"` // ??
 	PlayerCount byte          `csv:"cur_players"`
 	MaxPlayers  byte          `csv:"max_players"`
+	GameStatus  StatusByte    `csv:"status"`
+	Ping        time.Duration `csv:"ping"`
 	GameName    []byte        `csv:"-"` // es3a
 	GameVersion []byte        `csv:"-"` // V 001.000r
 	Name        []byte        `csv:"server_name"`
-	GameStatus  StatusByte    `csv:"status"`
-	Ping        time.Duration `csv:"ping"`
 	*Packet     `json:"-" csv:"-"`
 }
 
@@ -46,4 +47,26 @@ func (s *PingInfo) UnmarshalBinary(data []byte) error {
 	s.Name = p.Data[:Clen(p.Data)]
 
 	return nil
+}
+
+func (s *PingInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		GameMode    byte
+		PlayerCount byte
+		MaxPlayers  byte
+		GameName    string
+		GameVersion string
+		Name        string
+		GameStatus  StatusByte
+		Ping        time.Duration
+	}{
+		GameMode:    s.GameMode,
+		PlayerCount: s.PlayerCount,
+		MaxPlayers:  s.MaxPlayers,
+		GameName:    string(s.GameName),
+		GameVersion: string(s.GameVersion),
+		Name:        string(s.Name),
+		GameStatus:  s.GameStatus,
+		Ping:        s.Ping,
+	})
 }
