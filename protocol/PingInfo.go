@@ -69,6 +69,7 @@ func (s *PingInfo) MarshalJSON() ([]byte, error) {
 		GameName:    string(s.GameName),
 		GameVersion: string(s.GameVersion),
 		Name:        string(s.Name),
+		Address:     s.Address,
 		Ping:        s.Ping.String(),
 	})
 }
