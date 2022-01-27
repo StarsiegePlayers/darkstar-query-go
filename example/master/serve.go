@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -38,10 +39,10 @@ func serve(conn *net.PacketConn, addr net.Addr, buf []byte) {
 
 	err := p.UnmarshalBinary(buf)
 	if err != nil {
-		switch err {
-		case protocol.ErrorUnknownPacketVersion:
+		switch {
+		case errors.Is(err, protocol.ErrorUnknownPacketVersion):
 			LogServerAlert(ipPort, "Unknown protocol number")
-		case protocol.ErrorEmptyPacket:
+		case errors.Is(err, protocol.ErrorEmptyPacket):
 			LogServerAlert(ipPort, "Empty packet received")
 		default:
 			LogServerAlert(ipPort, "Error %s while parsing packet", err)
@@ -141,7 +142,7 @@ func registerPingInfo(conn *net.PacketConn, addr net.Addr, ipPort string, p *pro
 }
 
 func sendList(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Packet) {
-	packets := thisMaster.Service.GeneratePackets(thisMaster.Options, p.Key, findLocalAddress(addr))
+	packets := thisMaster.Service.GeneratePackets(thisMaster.Options, p.Key, findLocalAddress(addr), addr)
 	for _, v := range packets {
 		_, err := (*conn).WriteTo(v, addr)
 		if err != nil {
@@ -154,7 +155,7 @@ func sendList(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Pa
 }
 
 func sendBanned(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.Packet) {
-	packets := thisMaster.BannedService.GeneratePackets(thisMaster.Options, p.Key, nil)
+	packets := thisMaster.BannedService.GeneratePackets(thisMaster.Options, p.Key, nil, addr)
 	for _, v := range packets {
 		_, err := (*conn).WriteTo(v, addr)
 		if err != nil {
@@ -166,11 +167,11 @@ func sendBanned(conn *net.PacketConn, addr net.Addr, ipPort string, p *protocol.
 	LogServer(ipPort, "banned message sent")
 }
 
-func findLocalAddress(input net.Addr) *net.Addr {
-	raddr := net.ParseIP(input.String())
+func findLocalAddress(input net.Addr) net.Addr {
+	raddr := input.(*net.UDPAddr).IP
 
-	for _, laddr := range config.localAddresses {
-		if l, ok := (*laddr).(*net.IPNet); ok && l.Contains(raddr) {
+	for _, laddr := range config.localNetworks {
+		if laddr.Contains(raddr) {
 			return laddr
 		}
 	}

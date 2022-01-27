@@ -138,8 +138,9 @@ func (m *Master) MarshalBinaryHeader() (output []byte) {
 }
 
 // MarshalBinarySet generates the body of a darkstar master packet
-// laddr will correct a server registered as a localhost server with the specified address (generally, an external or LAN IP)
-func (m *Master) MarshalBinarySet(input map[string]*server.Server, laddr *net.Addr) (output []byte) {
+// laddr is the address of the interface the packet came in on
+// raddr is the address of the request
+func (m *Master) MarshalBinarySet(options *Options, input map[string]*server.Server, laddr net.Addr, raddr net.Addr) (output []byte) {
 	set := make([]string, 0)
 	for k := range input {
 		set = append(set, k)
@@ -150,6 +151,20 @@ func (m *Master) MarshalBinarySet(input map[string]*server.Server, laddr *net.Ad
 	// work with a byte buffer
 	hold := make([]byte, len(set)*7)
 
+	// classify the remote ip address
+	remoteIsLocalNet := false
+	remoteIsLocalHost := false
+
+	// if the local address and remote address are in the same network
+	if raddr != nil && raddr.(*net.UDPAddr).IP.IsPrivate() {
+		remoteIsLocalNet = true
+	}
+
+	// if the remote address is in the localhost network "127.0.0.1/8"
+	if raddr != nil && raddr.(*net.UDPAddr).IP.IsLoopback() {
+		remoteIsLocalHost = true
+	}
+
 	for index, hostPort := range set {
 		// split ip:port
 		stringHost, port, err := net.SplitHostPort(hostPort)
@@ -157,14 +172,26 @@ func (m *Master) MarshalBinarySet(input map[string]*server.Server, laddr *net.Ad
 			continue
 		}
 
-		// if we are about to send out a host registered as localhost
-		// swap it out for the host in laddr
-		if laddr != nil && *laddr != nil && stringHost == "127.0.0.1" {
-			hostNet := strings.Split((*laddr).String(), "/")
-			stringHost = hostNet[0]
-		}
-
 		host := net.ParseIP(stringHost)
+
+		switch {
+		// if the remote ip is in a local network, and we're about to send a host from a loopback address
+		// then substitute out the local ip corresponding to the local network the packet came in on
+		case remoteIsLocalNet:
+			if laddr != nil && host.IsLoopback() {
+				host = laddr.(*net.UDPAddr).IP
+			}
+
+		// if we have a STUN IP, and we've gotten our networks correctly
+		// and if the remote ip isn't from either localhost or a local network
+		// then substitute out the local ip address for the address received via STUN
+		case options.ExternalIP != nil && options.LocalNetworks != nil && !remoteIsLocalHost && !remoteIsLocalNet:
+			for _, v := range options.LocalNetworks {
+				if v.Contains(host) {
+					host = options.ExternalIP
+				}
+			}
+		}
 
 		// individual entry byte buffer
 		out := make([]byte, 7)
@@ -188,7 +215,7 @@ func (m *Master) MarshalBinarySet(input map[string]*server.Server, laddr *net.Ad
 	return
 }
 
-func (m *Master) GeneratePackets(options *Options, key uint16, laddr *net.Addr) [][]byte {
+func (m *Master) GeneratePackets(options *Options, key uint16, laddr net.Addr, raddr net.Addr) [][]byte {
 	serverAddresses := make([]string, 0)
 	for k := range m.Servers {
 		serverAddresses = append(serverAddresses, k)
@@ -227,7 +254,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16, laddr *net.Addr) 
 		// setting pkt 1 of 1 is distinctly different from ping/game info
 		pkt.Number = 1
 		pkt.Total = 1
-		dataset := m.MarshalBinarySet(m.Servers, laddr)
+		dataset := m.MarshalBinarySet(options, m.Servers, laddr, raddr)
 
 		tempData := make([]byte, len(header)+len(dataset))
 		copy(tempData[0:len(header)], header)
@@ -265,7 +292,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16, laddr *net.Addr) 
 	localAddresses = localAddresses[firstPacketMax:]
 
 	// marshal data
-	dataset := m.MarshalBinarySet(tmpAddresses, laddr)
+	dataset := m.MarshalBinarySet(options, tmpAddresses, laddr, raddr)
 	tempData := make([]byte, len(header)+len(dataset))
 	copy(tempData[0:len(header)], header)
 	copy(tempData[len(header):len(header)+len(dataset)], dataset)
@@ -304,7 +331,7 @@ func (m *Master) GeneratePackets(options *Options, key uint16, laddr *net.Addr) 
 		localAddresses = localAddresses[overflowPacketMax:]
 
 		// marshal and send
-		pkt.Data = m.MarshalBinarySet(tmpAddresses, laddr)
+		pkt.Data = m.MarshalBinarySet(options, tmpAddresses, laddr, raddr)
 
 		binOut, err = pkt.MarshalBinary()
 		if err != nil {

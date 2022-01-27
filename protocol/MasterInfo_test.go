@@ -67,13 +67,13 @@ func (t MasterTestSite) TestMaster_GeneratePackets_1Pkt() {
 	}
 	t.Master.Servers = generateAddresses(57)
 	t.Master.MasterID = 69
+
 	options := newOptions()
+	options.ExternalIP = nil
+	raddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	packets := t.Master.GeneratePackets(options, 0, nil, raddr)
 
-	packets := t.Master.GeneratePackets(options, 0, nil)
-
-	for k, v := range packets {
-		t.Assert().Equal(response[k], v)
-	}
+	t.AssertSetEqual(response, packets)
 }
 
 // TestMaster_GeneratePackets_2Pkts tests if the master server
@@ -150,14 +150,15 @@ func (t MasterTestSite) TestMaster_GeneratePackets_2Pkts() {
 			0x01, 0xC7, 0x71, 0x06, 0x7F, 0x00, 0x00, 0x01, 0xC8, 0x71,
 		},
 	}
+
 	t.Master.Servers = generateAddresses(128)
+
 	options := newOptions()
+	options.ExternalIP = nil
+	raddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	packets := t.Master.GeneratePackets(options, 0, nil, raddr)
 
-	packets := t.Master.GeneratePackets(options, 0, nil)
-
-	for k, v := range packets {
-		t.Assert().Equal(response[k], v)
-	}
+	t.AssertSetEqual(response, packets)
 }
 
 // TestMaster_MarshalPacket_NoMOTD_Header tests if we can correctly create a packet without an MOTD (ala MiniMaster)
@@ -167,7 +168,6 @@ func (t MasterTestSite) TestMaster_MarshalPacket_NoMOTD_Header() {
 		Servers:    server.NewServersMapFromList([]string{}),
 		MasterID:   99,
 	}
-	options := newOptions()
 
 	response := [][]byte{
 		{
@@ -176,11 +176,10 @@ func (t MasterTestSite) TestMaster_MarshalPacket_NoMOTD_Header() {
 		},
 	}
 
-	packets := t.Master.GeneratePackets(options, 0x0300, nil)
+	options := newOptions()
+	packets := t.Master.GeneratePackets(options, 0x0300, nil, nil)
 
-	for k, v := range packets {
-		t.Assert().Equal(response[k], v)
-	}
+	t.AssertSetEqual(response, packets)
 }
 
 // TestMaster_UnmarshalBinary tests if we can correctly parse
@@ -193,6 +192,7 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary() {
 		Servers:    server.NewServersMapFromList([]string{"154.0.175.219:29008", "184.89.64.182:29001", "154.0.175.219:29010", "154.0.175.219:29004", "154.0.175.219:29003", "154.0.175.219:29001", "154.0.175.219:29005", "154.0.175.219:29007", "154.0.175.219:29002", "154.0.175.219:29012", "154.0.175.219:29006", "192.155.86.254:29009", "154.0.175.219:29011", "192.155.86.254:29010", "192.155.86.254:29008", "192.155.86.254:29007", "192.155.86.254:29006", "192.155.86.254:29005", "192.155.86.254:29004", "192.155.86.254:29003", "192.155.86.254:29002", "192.155.86.254:29001", "96.126.117.157:29004", "96.126.117.157:29003", "96.126.117.157:29002", "96.126.117.157:29001", "154.0.175.219:29009"}),
 		MasterID:   2,
 	}
+
 	response := []byte{
 		0x10, 0x06, 0x01, 0x01, 0x45, 0x00, 0x00, 0x02, 0x16, 0x5C, 0x6E, 0x4D, 0x61, 0x73, 0x74, 0x65,
 		0x72, 0x32, 0x2E, 0x53, 0x74, 0x61, 0x72, 0x73, 0x69, 0x65, 0x67, 0x65, 0x2E, 0x70, 0x77, 0x3B,
@@ -237,6 +237,7 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary_Minimaster() {
 		Servers:    server.NewServersMapFromList([]string{"184.61.79.247:29002", "73.20.252.165:29002", "65.29.146.31:29003", "96.126.117.157:29002", "96.126.117.157:29004", "96.126.117.157:29005", "96.126.117.157:29007", "65.29.146.31:29001", "73.20.252.165:29001", "65.29.146.31:29002", "96.126.117.157:29001", "96.126.117.157:29003", "96.126.117.157:29006", "146.115.168.117:29001", "184.61.79.247:29001", "184.61.79.247:29003"}),
 		MasterID:   99,
 	}
+
 	response := []byte{
 		0x10, 0x06, 0x01, 0x01, 0x03, 0x00, 0x00, 0x63, 0x0A, 0x4D, 0x69, 0x6E, 0x69, 0x4D, 0x61, 0x73,
 		0x74, 0x65, 0x72, 0x00, 0x00, 0x10, 0x06, 0xB8, 0x3D, 0x4F, 0xF7, 0x49, 0x71, 0x06, 0xB8, 0x3D,
@@ -262,40 +263,72 @@ func (t MasterTestSite) TestMaster_UnmarshalBinary_Minimaster() {
 	}
 }
 
-// TestMaster_GeneratePackets_Replace_Localhost tests if we can correctly
+// TestMaster_GeneratePackets_Replace_LocalNets tests if we can correctly
 // generate packets that replace the localhost address with a specified address
-func (t MasterTestSite) TestMaster_GeneratePackets_Replace_Localhost() {
+func (t MasterTestSite) TestMaster_GeneratePackets_Replace_LocalNets() {
 	t.Master = &Master{
 		CommonName: "MiniMaster",
-		Servers:    server.NewServersMapFromList([]string{"127.0.0.1:29001", "184.61.79.247:29002", "73.20.252.165:29002", "65.29.146.31:29003", "96.126.117.157:29002", "96.126.117.157:29004", "96.126.117.157:29005", "96.126.117.157:29007", "65.29.146.31:29001", "73.20.252.165:29001", "65.29.146.31:29002", "96.126.117.157:29001", "96.126.117.157:29003", "96.126.117.157:29006", "184.61.79.247:29001", "184.61.79.247:29003"}),
+		Servers:    server.NewServersMapFromList([]string{"127.0.0.1:29001", "172.16.69.1:29002", "172.26.48.69:29003", "65.29.146.31:29003", "96.126.117.157:29002", "96.126.117.157:29004", "96.126.117.157:29005", "96.126.117.157:29007", "65.29.146.31:29001", "73.20.252.165:29001", "65.29.146.31:29002", "96.126.117.157:29001", "96.126.117.157:29003", "96.126.117.157:29006", "184.61.79.247:29001", "184.61.79.247:29003"}),
 		MasterID:   99,
 	}
 
-	_, t.IPNet, _ = net.ParseCIDR("169.254.69.69/32")
-
 	response := [][]byte{{
 		0x10, 0x06, 0x01, 0x01, 0x03, 0x00, 0x00, 0x63, 0x0A, 0x4D, 0x69, 0x6E, 0x69, 0x4D, 0x61, 0x73,
-		0x74, 0x65, 0x72, 0x00, 0x00, 0x10, 0x06, 0xA9, 0xFE, 0x45, 0x45, 0x49, 0x71, 0x06, 0xB8, 0x3D,
-		0x4F, 0xF7, 0x49, 0x71, 0x06, 0xB8, 0x3D, 0x4F, 0xF7, 0x4A, 0x71, 0x06, 0xB8, 0x3D, 0x4F, 0xF7,
-		0x4B, 0x71, 0x06, 0x41, 0x1D, 0x92, 0x1F, 0x49, 0x71, 0x06, 0x41, 0x1D, 0x92, 0x1F, 0x4A, 0x71,
-		0x06, 0x41, 0x1D, 0x92, 0x1F, 0x4B, 0x71, 0x06, 0x49, 0x14, 0xFC, 0xA5, 0x49, 0x71, 0x06, 0x49,
-		0x14, 0xFC, 0xA5, 0x4A, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x49, 0x71, 0x06, 0x60, 0x7E, 0x75,
+		0x74, 0x65, 0x72, 0x00, 0x00, 0x10, 0x06, 0xA9, 0xFE, 0x45, 0x45, 0x49, 0x71, 0x06, 0xA9, 0xFE,
+		0x45, 0x45, 0x4A, 0x71, 0x06, 0xA9, 0xFE, 0x45, 0x45, 0x4B, 0x71, 0x06, 0xB8, 0x3D, 0x4F, 0xF7,
+		0x49, 0x71, 0x06, 0xB8, 0x3D, 0x4F, 0xF7, 0x4B, 0x71, 0x06, 0x41, 0x1D, 0x92, 0x1F, 0x49, 0x71,
+		0x06, 0x41, 0x1D, 0x92, 0x1F, 0x4A, 0x71, 0x06, 0x41, 0x1D, 0x92, 0x1F, 0x4B, 0x71, 0x06, 0x49,
+		0x14, 0xFC, 0xA5, 0x49, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x49, 0x71, 0x06, 0x60, 0x7E, 0x75,
 		0x9D, 0x4A, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4B, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4C,
 		0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4D, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4E, 0x71, 0x06,
 		0x60, 0x7E, 0x75, 0x9D, 0x4F, 0x71,
 	}}
 
 	options := newOptions()
+	laddr, _ := net.ResolveUDPAddr("udp", "172.16.0.69:0")
+	raddr, _ := net.ResolveUDPAddr("udp", "69.69.69.69:0")
+	packets := t.Master.GeneratePackets(options, 0x0300, laddr, raddr)
 
-	packets := t.Master.GeneratePackets(options, 0x0300, &t.IPNet)
+	t.AssertSetEqual(response, packets)
+}
 
-	for k, v := range packets {
-		t.Assert().Equal(v, response[k])
+// TestMaster_GeneratePackets_Replace_LocalNets_Adjacent tests if we can correctly
+// generate packets that replace the localhost address with a specified address
+func (t MasterTestSite) TestMaster_GeneratePackets_Replace_LocalNets_Adjacent() {
+	t.Master = &Master{
+		CommonName: "MiniMaster",
+		Servers:    server.NewServersMapFromList([]string{"127.0.0.1:29001", "172.16.69.1:29002", "172.26.48.69:29003", "65.29.146.31:29003", "96.126.117.157:29002", "96.126.117.157:29004", "96.126.117.157:29005", "96.126.117.157:29007", "65.29.146.31:29001", "73.20.252.165:29001", "65.29.146.31:29002", "96.126.117.157:29001", "96.126.117.157:29003", "96.126.117.157:29006", "184.61.79.247:29001", "184.61.79.247:29003"}),
+		MasterID:   99,
 	}
+
+	response := [][]byte{{
+		0x10, 0x06, 0x01, 0x01, 0x03, 0x00, 0x00, 0x63, 0x0A, 0x4D, 0x69, 0x6E, 0x69, 0x4D, 0x61, 0x73,
+		0x74, 0x65, 0x72, 0x00, 0x00, 0x10, 0x06, 0xAC, 0x10, 0x00, 0x45, 0x49, 0x71, 0x06, 0xAC, 0x10,
+		0x45, 0x01, 0x4A, 0x71, 0x06, 0xAC, 0x1A, 0x30, 0x45, 0x4B, 0x71, 0x06, 0xB8, 0x3D, 0x4F, 0xF7,
+		0x49, 0x71, 0x06, 0xB8, 0x3D, 0x4F, 0xF7, 0x4B, 0x71, 0x06, 0x41, 0x1D, 0x92, 0x1F, 0x49, 0x71,
+		0x06, 0x41, 0x1D, 0x92, 0x1F, 0x4A, 0x71, 0x06, 0x41, 0x1D, 0x92, 0x1F, 0x4B, 0x71, 0x06, 0x49,
+		0x14, 0xFC, 0xA5, 0x49, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x49, 0x71, 0x06, 0x60, 0x7E, 0x75,
+		0x9D, 0x4A, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4B, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4C,
+		0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4D, 0x71, 0x06, 0x60, 0x7E, 0x75, 0x9D, 0x4E, 0x71, 0x06,
+		0x60, 0x7E, 0x75, 0x9D, 0x4F, 0x71,
+	}}
+
+	options := newOptions()
+	laddr, _ := net.ResolveUDPAddr("udp", "172.16.0.69:0")
+	raddr, _ := net.ResolveUDPAddr("udp", "172.16.0.1:0")
+	packets := t.Master.GeneratePackets(options, 0x0300, laddr, raddr)
+
+	t.AssertSetEqual(response, packets)
 }
 
 /********************************************************************/
 // Utility Functions
+
+func (t MasterTestSite) AssertSetEqual(expected [][]byte, actual [][]byte) {
+	for k, v := range actual {
+		t.Assert().Equal(expected[k], v)
+	}
+}
 
 func generateAddresses(count int) (output map[string]*server.Server) {
 	startPort := 29001
@@ -311,10 +344,20 @@ func generateAddresses(count int) (output map[string]*server.Server) {
 }
 
 func newOptions() *Options {
+	_, localhost, _ := net.ParseCIDR("127.0.0.1/8")
+	_, localnet1, _ := net.ParseCIDR("172.16.0.1/16")
+	_, localnet2, _ := net.ParseCIDR("172.26.48.1/20")
+
 	return &Options{
 		Timeout:             0,
 		Debug:               false,
 		MaxServerPacketSize: 512,
+		ExternalIP:          net.ParseIP("169.254.69.69"),
+		LocalNetworks: []*net.IPNet{
+			localhost,
+			localnet1,
+			localnet2,
+		},
 	}
 }
 

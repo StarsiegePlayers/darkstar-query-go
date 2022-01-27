@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"os"
 	"sync"
@@ -31,7 +32,7 @@ type Configuration struct {
 	BannedNetworks      []string
 
 	parsedBannedNets []*net.IPNet
-	localAddresses   []*net.Addr
+	localNetworks    []*net.IPNet
 	serverTimeout    time.Duration
 	maintenanceTimer time.Duration
 }
@@ -71,16 +72,16 @@ func configInit() {
 			rehashConfig(v)
 		}
 	})
-	v.WatchConfig()
 
 	rehashConfig(v)
 
 	loggerInit(config.ColorLogs)
+	v.WatchConfig()
 }
 
 func rehashConfig(v *viper.Viper) {
 	err := v.ReadInConfig()
-	if _, configFileNotFound := err.(viper.ConfigFileNotFoundError); err != nil && configFileNotFound {
+	if err != nil && errors.As(err, &viper.ConfigFileNotFoundError{}) {
 		LogComponentAlert("config", "config file not found, creating...")
 
 		err := v.WriteConfigAs(DefaultConfigFileName)
@@ -93,12 +94,12 @@ func rehashConfig(v *viper.Viper) {
 	}
 
 	config = new(Configuration)
-	config.Lock()
-
 	err = v.Unmarshal(&config)
 	if err != nil {
 		LogComponentAlert("config", "error unmarshalling config [%s]", err)
 	}
+
+	config.Lock()
 
 	config.parsedBannedNets = make([]*net.IPNet, 0)
 	for _, v := range config.BannedNetworks {
@@ -137,12 +138,12 @@ func rehashConfig(v *viper.Viper) {
 	thisMaster.Options.MaxServerPacketSize = config.MaxPacketSize
 	thisMaster.Unlock()
 
-	config.localAddresses = generateLocalAddresses()
+	config.localNetworks = generateLocalAddresses()
 	config.Unlock()
 }
 
-func generateLocalAddresses() (output []*net.Addr) {
-	output = make([]*net.Addr, 0)
+func generateLocalAddresses() (output []*net.IPNet) {
+	output = make([]*net.IPNet, 0)
 
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -156,7 +157,7 @@ func generateLocalAddresses() (output []*net.Addr) {
 		}
 
 		for k := range addrs {
-			output = append(output, &addrs[k])
+			output = append(output, addrs[k].(*net.IPNet))
 		}
 	}
 

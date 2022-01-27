@@ -29,6 +29,7 @@ func init() {
 func main() {
 	loggerInit(false)
 	configInit()
+	thisMaster.Options.LocalNetworks = config.localNetworks
 
 	LogComponent("startup", "~~~ Neo's MiniMaster Starting Up ~~~")
 	LogComponent("startup", "Version %s %s - Built on [%s@%s]", VERSION, DEBUG, DATE, TIME)
